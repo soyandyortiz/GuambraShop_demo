@@ -453,6 +453,126 @@ paypal_order_id   TEXT     -- capture ID de PayPal para trazabilidad
 
 ---
 
+#### Pago con Payphone
+
+Módulo opcional que permite al comprador pagar en línea con Payphone (tarjeta o app) sin salir del carrito. Funciona con la **Cajita de Pagos** (widget embebido). Los cobros van directamente a la cuenta Payphone del cliente.
+
+---
+
+**¿Cómo funciona el modelo de cuentas?**
+
+```
+Comprador  ──paga──▶  Cuenta Payphone del CLIENTE (negocio)
+                           ▲
+            Andy (GuambraWeb / superadmin) configuró el token
+```
+
+---
+
+**Pasos completos para activar Payphone en un cliente nuevo:**
+
+**1. El cliente crea su cuenta Payphone**
+- Ir a [payphonetodoesposible.com](https://www.payphonetodoesposible.com) → registrarse como negocio
+- Completar la verificación de identidad y cuenta bancaria
+
+**2. Crear aplicación tipo "Web" en el portal de desarrolladores**
+- Entrar a [appdeveloper.payphonetodoesposible.com](https://appdeveloper.payphonetodoesposible.com)
+- Click en **Nueva Aplicación** y llenar:
+
+| Campo | Valor |
+|-------|-------|
+| Nombre | Nombre del negocio (ej. "Chakana Ecommerce") |
+| Descripción | Pasarela de pago para tienda online |
+| Categoría | La que corresponda al negocio |
+| Plataforma Desarrollo | .Net (o cualquiera) |
+| **Tipo de Aplicación** | **Web** ← crítico, NO usar "Api" |
+| Dominio web | `https://dominio-del-cliente.com` (con https://) |
+| URL de respuesta | `https://dominio-del-cliente.com/api/pedidos/payphone/confirmar` |
+
+> **Importante:** el Tipo de Aplicación debe ser **Web**. Con tipo "Api" el widget de la Cajita devuelve error 401.
+
+**3. Copiar el Token**
+- Una vez creada la app, ir a la pestaña **Credenciales**
+- Copiar el **Token** (campo largo alfanumérico)
+
+**4. Configurar en el panel admin**
+- Entrar al panel del cliente: **Perfil → pestaña Métodos de pago → sección Payphone**
+- Pegar el Token y activar el toggle
+
+**5. Ejecutar la migración SQL** (si no se usó `schema.sql` completo)
+- En **Supabase → SQL Editor** del proyecto del cliente, ejecutar:
+
+```sql
+-- Migración _059: columnas Payphone
+ALTER TABLE configuracion_tienda
+  ADD COLUMN IF NOT EXISTS payphone_activo BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS payphone_token TEXT,
+  ADD COLUMN IF NOT EXISTS payphone_store_id TEXT;
+
+ALTER TABLE pedidos
+  ADD COLUMN IF NOT EXISTS payphone_payment_id TEXT;
+
+ALTER TABLE pedidos DROP CONSTRAINT IF EXISTS pedidos_forma_pago_check;
+ALTER TABLE pedidos ADD CONSTRAINT pedidos_forma_pago_check
+  CHECK (forma_pago IN ('efectivo', 'transferencia', 'tarjeta', 'otro', 'payphone', 'paypal'));
+```
+
+> La tabla `pedidos_temporales` ya la crea la migración `_051_comprobantes_pago.sql` — no hace falta crearla de nuevo.
+
+---
+
+**Flujo del comprador (carrito — paso 4):**
+
+Cuando Payphone está activo, aparece el botón "Pagar con Payphone" junto a los demás métodos:
+
+1. El comprador hace click → se guarda el carrito en `pedidos_temporales` (30 min de expiración)
+2. Aparece la **Cajita de Payphone** (widget embebido) — el comprador paga con tarjeta o app
+3. Payphone redirige a `/api/pedidos/payphone/confirmar`
+4. El servidor crea el pedido en `pedidos` con `estado = 'procesando'` y `forma_pago = 'payphone'`
+5. Se descuenta stock, se envía email de confirmación y notificación Telegram
+6. El comprador llega a `/pedido/GS-2026-XXXXXX?pago=payphone`
+
+**El admin no necesita hacer nada** — los pedidos Payphone llegan directamente en estado `procesando`.
+
+---
+
+**Pruebas (modo sandbox):**
+- En el portal de Payphone, la app puede estar en modo **Prueba** o **Producción**
+- En modo Prueba aparece la opción "Tester PayPhone" — simula pagos sin cobrar dinero real
+- El flujo completo funciona igual en prueba y producción
+- Para producción real: cambiar la app a modo Producción en el portal y actualizar el token en el panel admin
+
+---
+
+**Diferencia clave entre los métodos de pago:**
+
+| | Transferencia | PayPal | Payphone |
+|---|---|---|---|
+| Requiere acción del admin | Sí (revisar comprobante) | No | No |
+| Estado inicial del pedido | `pendiente_validacion` | `procesando` | `procesando` |
+| Stock descontado | Al confirmar manualmente | Automático | Automático |
+| Confirmación al comprador | Tras validación admin | Inmediata | Inmediata |
+
+---
+
+**Tablas/columnas involucradas:**
+
+```sql
+-- configuracion_tienda
+payphone_activo   BOOLEAN  DEFAULT false
+payphone_token    TEXT
+payphone_store_id TEXT     -- opcional, para multi-tienda Payphone
+
+-- pedidos
+payphone_payment_id TEXT   -- ID de transacción Payphone para trazabilidad
+```
+
+**Migración:** `supabase/migrations/20260516000059_payphone.sql`
+
+**Variables de entorno:** ninguna adicional — el token se guarda en la base de datos del cliente.
+
+---
+
 ## Personalización visual
 
 Desde `/admin/dashboard/perfil` → pestaña **Colores**:
