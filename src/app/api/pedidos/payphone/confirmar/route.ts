@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
 
     // 6. Cupón (fire-and-forget)
     if (temporal.cupon_codigo) {
-      admin.rpc('incrementar_uso_cupon', { p_codigo: temporal.cupon_codigo }).catch(() => {})
+      admin.rpc('incrementar_uso_cupon', { p_codigo: temporal.cupon_codigo }).then(() => {}, () => {})
     }
 
     // 7. Limpiar temporal
