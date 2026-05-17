@@ -126,9 +126,10 @@ export async function GET(req: NextRequest) {
     console.log('[payphone/confirmar] pedido creado:', pedido.numero_orden)
 
     // 5. Confirmar stock/citas — no-fatal si el RPC no existe
-    admin.rpc('confirmar_pedido', { p_pedido_id: pedido.id })
-      .then(({ error: e }) => { if (e) console.warn('[payphone/confirmar] rpc confirmar_pedido:', e.message) })
-      .catch((e) => console.warn('[payphone/confirmar] rpc confirmar_pedido catch:', e))
+    admin.rpc('confirmar_pedido', { p_pedido_id: pedido.id }).then(
+      ({ error: e }) => { if (e) console.warn('[payphone/confirmar] rpc confirmar_pedido:', e.message) },
+      (e: unknown) => { console.warn('[payphone/confirmar] rpc confirmar_pedido catch:', e) },
+    )
 
     // 6. Cupón (fire-and-forget)
     if (temporal.cupon_codigo) {
