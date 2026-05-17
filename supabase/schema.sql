@@ -1684,7 +1684,7 @@ create trigger tr_clientes_actualizar_ts
 -- ============================================================
 alter table pedidos
   add column if not exists forma_pago      text
-    check (forma_pago in ('efectivo', 'transferencia', 'tarjeta', 'otro', 'paypal')),
+    check (forma_pago in ('efectivo', 'transferencia', 'tarjeta', 'otro', 'paypal', 'payphone')),
   add column if not exists es_venta_manual boolean not null default false;
 
 create index if not exists idx_pedidos_manual on pedidos(es_venta_manual) where es_venta_manual = true;
