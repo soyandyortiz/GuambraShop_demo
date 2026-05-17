@@ -8,7 +8,19 @@ import type { Factura, ConfiguracionFacturacion } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PáginaFacturacion() {
+const POR_PAGINA = 50
+
+export default async function PáginaFacturacion({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>
+}) {
+  const params = await searchParams
+  const pagina = Math.max(1, parseInt(params.p ?? '1'))
+  const offset = (pagina - 1) * POR_PAGINA
+  const estadoFiltro = params.estado ?? 'todos'
+  const q = params.q ?? ''
+
   const supabase = await crearClienteServidor()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/admin')
@@ -20,8 +32,17 @@ export default async function PáginaFacturacion() {
   const hoy       = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString()
   const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
 
+  // Query principal con filtros server-side
+  let queryFacturas = supabase
+    .from('facturas')
+    .select('*', { count: 'exact' })
+    .order('creado_en', { ascending: false })
+  if (estadoFiltro !== 'todos') queryFacturas = queryFacturas.eq('estado', estadoFiltro)
+  if (q) queryFacturas = queryFacturas.or(`numero_factura.ilike.%${q}%,numero_secuencial.ilike.%${q}%`)
+  queryFacturas = queryFacturas.range(offset, offset + POR_PAGINA - 1)
+
   const [
-    { data: facturas },
+    { data: facturas, count: totalFacturas },
     { data: config },
     { data: cfgEmail },
     { data: cfgTienda },
@@ -29,8 +50,11 @@ export default async function PáginaFacturacion() {
     { count: countMes },
     { count: countProformasHoy },
     { count: countProformasMes },
+    { count: statsAutorizadas },
+    { count: statsPendientes },
+    { count: statsRechazadas },
   ] = await Promise.all([
-    supabase.from('facturas').select('*').order('creado_en', { ascending: false }).limit(100),
+    queryFacturas,
     supabase.from('configuracion_facturacion').select('*').maybeSingle(),
     supabase.from('configuracion_email').select('proveedor, activo').maybeSingle(),
     supabase.from('configuracion_tienda').select('nombre_tienda, simbolo_moneda, ticket_ancho_papel, ticket_linea_1, ticket_linea_2, ticket_linea_3, ticket_linea_4, ticket_texto_pie, ticket_pie_2, ticket_mostrar_precio_unit').single(),
@@ -38,6 +62,9 @@ export default async function PáginaFacturacion() {
     supabase.from('facturas').select('*', { count: 'exact', head: true }).gte('email_enviado_en', inicioMes),
     supabase.from('proformas').select('*', { count: 'exact', head: true }).gte('email_enviado_en', hoy),
     supabase.from('proformas').select('*', { count: 'exact', head: true }).gte('email_enviado_en', inicioMes),
+    supabase.from('facturas').select('*', { count: 'exact', head: true }).eq('estado', 'autorizada'),
+    supabase.from('facturas').select('*', { count: 'exact', head: true }).eq('estado', 'enviada'),
+    supabase.from('facturas').select('*', { count: 'exact', head: true }).eq('estado', 'rechazada'),
   ])
 
   const enviosHoy = (countHoy ?? 0) + (countProformasHoy ?? 0)
@@ -120,9 +147,17 @@ export default async function PáginaFacturacion() {
       {/* Tabla */}
       <TablaFacturas
         facturas={(facturas ?? []) as Factura[]}
+        total={totalFacturas ?? 0}
+        pagina={pagina}
+        porPagina={POR_PAGINA}
         configActiva={!!configActiva}
         ruc={configActiva?.ruc}
         ambiente={configActiva?.ambiente}
+        estadoFiltro={estadoFiltro}
+        q={q}
+        statsAutorizadas={statsAutorizadas ?? 0}
+        statsPendientes={statsPendientes ?? 0}
+        statsRechazadas={statsRechazadas ?? 0}
         configTicket={{
           nombreTienda:      (cfgTienda as any)?.nombre_tienda  ?? 'Mi Tienda',
           simboloMoneda:     (cfgTienda as any)?.simbolo_moneda ?? '$',

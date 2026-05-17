@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { Star, Check, X, ExternalLink, Trash2, Loader2, Clock, CheckCircle2, Eye } from 'lucide-react'
+import { useState, useTransition } from 'react'
+import { Star, Check, ExternalLink, Trash2, Loader2, Clock, CheckCircle2, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { PaginacionAdmin } from '@/components/ui/paginacion-admin'
 
 interface Resena {
   id: string
@@ -21,6 +23,11 @@ interface Resena {
 interface Props {
   pendientes: Resena[]
   aprobadas: Resena[]
+  totalPendientes: number
+  totalAprobadas: number
+  pagina: number
+  tabActiva: 'pendientes' | 'aprobadas'
+  porPagina: number
 }
 
 function TarjetaResena({
@@ -143,11 +150,21 @@ function TarjetaResena({
   )
 }
 
-export function TablaResenas({ pendientes: pendientesIniciales, aprobadas: aprobadasIniciales }: Props) {
-  const [pendientes, setPendientes] = useState<Resena[]>(pendientesIniciales)
-  const [aprobadas, setAprobadas] = useState<Resena[]>(aprobadasIniciales)
+export function TablaResenas({
+  pendientes, aprobadas,
+  totalPendientes, totalAprobadas,
+  pagina, tabActiva, porPagina,
+}: Props) {
+  const router = useRouter()
+  const [, startTransition] = useTransition()
   const [procesando, setProcesando] = useState<string | null>(null)
-  const [tab, setTab] = useState<'pendientes' | 'aprobadas'>('pendientes')
+
+  function cambiarTab(tab: 'pendientes' | 'aprobadas') {
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', tab)
+    params.delete('p')
+    startTransition(() => router.replace(`/admin/dashboard/resenas?${params}`))
+  }
 
   async function aprobar(id: string) {
     setProcesando(id)
@@ -160,12 +177,8 @@ export function TablaResenas({ pendientes: pendientesIniciales, aprobadas: aprob
     if (error) {
       toast.error('Error al aprobar la reseña')
     } else {
-      const resena = pendientes.find(r => r.id === id)
-      if (resena) {
-        setPendientes(prev => prev.filter(r => r.id !== id))
-        setAprobadas(prev => [{ ...resena, es_visible: true }, ...prev])
-        toast.success('Reseña aprobada y publicada ✓')
-      }
+      toast.success('Reseña aprobada y publicada')
+      startTransition(() => router.refresh())
     }
     setProcesando(null)
   }
@@ -181,50 +194,50 @@ export function TablaResenas({ pendientes: pendientesIniciales, aprobadas: aprob
     if (error) {
       toast.error('Error al eliminar la reseña')
     } else {
-      setPendientes(prev => prev.filter(r => r.id !== id))
-      setAprobadas(prev => prev.filter(r => r.id !== id))
       toast.success('Reseña eliminada')
+      startTransition(() => router.refresh())
     }
     setProcesando(null)
   }
 
-  const listaActual = tab === 'pendientes' ? pendientes : aprobadas
+  const listaActual = tabActiva === 'pendientes' ? pendientes : aprobadas
+  const totalActual = tabActiva === 'pendientes' ? totalPendientes : totalAprobadas
 
   return (
     <div className="flex flex-col gap-4">
       {/* Tabs */}
       <div className="flex gap-1 bg-background-subtle p-1 rounded-xl w-fit">
         <button
-          onClick={() => setTab('pendientes')}
+          onClick={() => cambiarTab('pendientes')}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
-            tab === 'pendientes'
+            tabActiva === 'pendientes'
               ? 'bg-card shadow-sm text-foreground border border-border'
               : 'text-foreground-muted hover:text-foreground'
           )}
         >
           <Clock className="w-3.5 h-3.5" />
           Pendientes
-          {pendientes.length > 0 && (
+          {totalPendientes > 0 && (
             <span className="min-w-[20px] h-5 bg-warning text-white text-[10px] font-black rounded-full flex items-center justify-center px-1">
-              {pendientes.length}
+              {totalPendientes}
             </span>
           )}
         </button>
         <button
-          onClick={() => setTab('aprobadas')}
+          onClick={() => cambiarTab('aprobadas')}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all',
-            tab === 'aprobadas'
+            tabActiva === 'aprobadas'
               ? 'bg-card shadow-sm text-foreground border border-border'
               : 'text-foreground-muted hover:text-foreground'
           )}
         >
           <Eye className="w-3.5 h-3.5" />
           Publicadas
-          {aprobadas.length > 0 && (
+          {totalAprobadas > 0 && (
             <span className="min-w-[20px] h-5 bg-background-subtle text-foreground-muted text-[10px] font-black rounded-full flex items-center justify-center px-1 border border-border">
-              {aprobadas.length}
+              {totalAprobadas}
             </span>
           )}
         </button>
@@ -234,17 +247,17 @@ export function TablaResenas({ pendientes: pendientesIniciales, aprobadas: aprob
       {listaActual.length === 0 ? (
         <div className="py-16 text-center rounded-2xl border border-dashed border-border bg-card">
           <div className="w-12 h-12 rounded-2xl bg-background-subtle flex items-center justify-center mx-auto mb-3">
-            {tab === 'pendientes'
+            {tabActiva === 'pendientes'
               ? <Clock className="w-6 h-6 text-foreground-muted/40" />
               : <CheckCircle2 className="w-6 h-6 text-foreground-muted/40" />
             }
           </div>
           <p className="text-sm font-bold text-foreground">
-            {tab === 'pendientes' ? 'Sin reseñas pendientes' : 'Sin reseñas publicadas'}
+            {tabActiva === 'pendientes' ? 'Sin reseñas pendientes' : 'Sin reseñas publicadas'}
           </p>
           <p className="text-xs text-foreground-muted mt-1">
-            {tab === 'pendientes'
-              ? 'Todas las reseñas están al día 🎉'
+            {tabActiva === 'pendientes'
+              ? 'Todas las reseñas están al día'
               : 'Aprueba reseñas para que aparezcan en la tienda'
             }
           </p>
@@ -262,6 +275,18 @@ export function TablaResenas({ pendientes: pendientesIniciales, aprobadas: aprob
           ))}
         </div>
       )}
+
+      {/* Paginación */}
+      <PaginacionAdmin
+        total={totalActual}
+        porPagina={porPagina}
+        pagina={pagina}
+        onPaginar={(p) => {
+          const params = new URLSearchParams(window.location.search)
+          params.set('p', String(p))
+          startTransition(() => router.replace(`/admin/dashboard/resenas?${params}`))
+        }}
+      />
     </div>
   )
 }

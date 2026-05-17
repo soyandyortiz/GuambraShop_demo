@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FileText, Download, XCircle, ChevronDown, Search,
@@ -14,13 +14,22 @@ import { toast } from 'sonner'
 import { traducirMensajesSRI } from '@/lib/sri/errores-sri'
 import { imprimirTicket, type ConfigTicket } from '@/lib/ticket'
 import type { Factura, EstadoFactura } from '@/types'
+import { PaginacionAdmin } from '@/components/ui/paginacion-admin'
 
 interface Props {
   facturas: Factura[]
+  total: number
+  pagina: number
+  porPagina: number
   configActiva: boolean
   ruc?: string
   ambiente?: 'pruebas' | 'produccion'
   configTicket?: ConfigTicket
+  estadoFiltro?: string
+  q?: string
+  statsAutorizadas: number
+  statsPendientes: number
+  statsRechazadas: number
 }
 
 const COLORES_ESTADO: Record<EstadoFactura, string> = {
@@ -486,11 +495,17 @@ function ModalEliminar({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', ambiente = 'produccion', configTicket }: Props) {
+export function TablaFacturas({
+  facturas: facturasInic, total, pagina, porPagina, configActiva,
+  ruc = '', ambiente = 'produccion', configTicket,
+  estadoFiltro = 'todos', q = '',
+  statsAutorizadas, statsPendientes, statsRechazadas,
+}: Props) {
   const router = useRouter()
+  const [, startTransition] = useTransition()
   const [facturas, setFacturas] = useState<Factura[]>(facturasInic)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState<EstadoFactura | 'todos'>('todos')
+  const [busquedaLocal, setBusquedaLocal] = useState(q)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [enviando, setEnviando] = useState<string | null>(null)
   const [anulando, setAnulando] = useState<string | null>(null)
   const [consultando, setConsultando] = useState<string | null>(null)
@@ -719,7 +734,7 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
       'N° Autorización SRI', 'Motivo anulación',
     ]
 
-    const filas = filtradas.map(f => [
+    const filas = facturas.map(f => [
       esc(f.numero_factura ?? f.numero_secuencial),
       esc(f.fecha_emision),
       esc(LABELS_ESTADO[f.estado]),
@@ -743,7 +758,7 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
     a.download = `facturas_${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success(`${filtradas.length} factura${filtradas.length !== 1 ? 's' : ''} exportada${filtradas.length !== 1 ? 's' : ''}`)
+    toast.success(`${facturas.length} factura${facturas.length !== 1 ? 's' : ''} exportada${facturas.length !== 1 ? 's' : ''}`)
   }
 
   async function sendRide(facturaId: string, emailDestino?: string) {
@@ -781,14 +796,29 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
     }
   }
 
-  const filtradas = facturas.filter(f => {
-    const matchEstado = filtroEstado === 'todos' || f.estado === filtroEstado
-    const matchBusqueda = !busqueda ||
-      f.numero_factura?.includes(busqueda) ||
-      f.datos_comprador?.razon_social?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      f.datos_comprador?.identificacion?.includes(busqueda)
-    return matchEstado && matchBusqueda
-  })
+  // Navegación URL con filtros
+  function navegarConFiltros(overrides: Record<string, string>) {
+    const params = new URLSearchParams(window.location.search)
+    Object.entries(overrides).forEach(([k, v]) => {
+      if (v && v !== 'todos') params.set(k, v)
+      else params.delete(k)
+    })
+    // Reset página al cambiar filtros
+    if ('estado' in overrides || 'q' in overrides) params.delete('p')
+    startTransition(() => router.replace(`/admin/dashboard/facturacion?${params}`))
+  }
+
+  function handleEstadoCambio(nuevoEstado: string) {
+    navegarConFiltros({ estado: nuevoEstado })
+  }
+
+  function handleBusquedaCambio(valor: string) {
+    setBusquedaLocal(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      navegarConFiltros({ q: valor })
+    }, 400)
+  }
 
   if (!configActiva) {
     return (
@@ -799,11 +829,6 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
       </div>
     )
   }
-
-  // Stats rápidas
-  const countAutorizadas = facturas.filter(f => f.estado === 'autorizada').length
-  const countPendientes  = facturas.filter(f => f.estado === 'enviada').length
-  const countRechazadas  = facturas.filter(f => f.estado === 'rechazada').length
 
   return (
     <>
@@ -884,9 +909,9 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Autorizadas', val: countAutorizadas, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-            { label: 'Pendientes',  val: countPendientes,  color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-100' },
-            { label: 'Rechazadas',  val: countRechazadas,  color: 'text-red-600',     bg: 'bg-red-50 border-red-100' },
+            { label: 'Autorizadas', val: statsAutorizadas, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+            { label: 'Pendientes',  val: statsPendientes,  color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-100' },
+            { label: 'Rechazadas',  val: statsRechazadas,  color: 'text-red-600',     bg: 'bg-red-50 border-red-100' },
           ].map(s => (
             <div key={s.label} className={cn('rounded-xl border px-3 py-2.5 text-center', s.bg)}>
               <p className={cn('text-xl font-bold', s.color)}>{s.val}</p>
@@ -901,16 +926,16 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted/50" />
             <input
               type="text"
-              placeholder="Buscar por N° factura, RUC o nombre…"
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por N° factura o secuencial…"
+              value={busquedaLocal}
+              onChange={e => handleBusquedaCambio(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <div className="relative">
             <select
-              value={filtroEstado}
-              onChange={e => setFiltroEstado(e.target.value as EstadoFactura | 'todos')}
+              value={estadoFiltro}
+              onChange={e => handleEstadoCambio(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="todos">Todos los estados</option>
@@ -922,7 +947,7 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
           </div>
           <button
             onClick={exportarCSV}
-            disabled={filtradas.length === 0}
+            disabled={facturas.length === 0}
             title="Exportar facturas visibles a CSV"
             className="flex items-center gap-2 h-10 px-3 rounded-xl border border-border text-foreground-muted text-sm font-medium hover:text-foreground hover:border-primary/40 transition-all disabled:opacity-40 flex-shrink-0"
           >
@@ -932,11 +957,11 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
         </div>
 
         {/* Tabla */}
-        {filtradas.length === 0 ? (
+        {facturas.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-10 text-center">
             <FileText className="w-10 h-10 text-foreground-muted/30 mx-auto mb-3" />
             <p className="text-sm text-foreground-muted">
-              {facturas.length === 0 ? 'Aún no hay facturas emitidas' : 'Sin resultados para tu búsqueda'}
+              {total === 0 ? 'Aún no hay facturas emitidas' : 'Sin resultados para tu búsqueda'}
             </p>
           </div>
         ) : (
@@ -954,11 +979,11 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
                   </tr>
                 </thead>
                 <tbody>
-                  {filtradas.map((factura, i) => (
+                  {facturas.map((factura, i) => (
                     <FilaFactura
                       key={factura.id}
                       factura={factura}
-                      esUltima={i === filtradas.length - 1}
+                      esUltima={i === facturas.length - 1}
                       onEmitir={emitir}
                       onAnular={() => handleAnular(factura)}
                       onConsultar={consultarSRI}
@@ -979,11 +1004,16 @@ export function TablaFacturas({ facturas: facturasInic, configActiva, ruc = '', 
           </div>
         )}
 
-        {facturas.length > 0 && (
-          <p className="text-xs text-foreground-muted text-right">
-            {filtradas.length} de {facturas.length} facturas
-          </p>
-        )}
+        <PaginacionAdmin
+          total={total}
+          porPagina={porPagina}
+          pagina={pagina}
+          onPaginar={(p) => {
+            const params = new URLSearchParams(window.location.search)
+            params.set('p', String(p))
+            startTransition(() => router.replace(`/admin/dashboard/facturacion?${params}`))
+          }}
+        />
       </div>
     </>
   )
