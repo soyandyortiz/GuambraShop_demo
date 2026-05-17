@@ -61,19 +61,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${siteUrl}/carrito?error=config`)
     }
 
-    // 2. Verificar con API de Payphone (no-fatal — si falla, confiamos en la URL)
+    // 2. Si la URL ya dice Approved, confiar en eso (Payphone solo envía esto tras pago exitoso)
+    //    Si no, llamar al verify API como fallback
     let aprobado = aprobadoPorUrl
-    try {
-      const verificacion = await verificarPagoPayphone({ token: cfg.payphone_token, id, clientTransactionId })
-      console.log('[payphone/confirmar] verificacion API:', JSON.stringify(verificacion))
-      aprobado = verificacion.statusCode === 3 || verificacion.transactionStatus?.toLowerCase() === 'approved'
-    } catch (errVerify) {
-      console.warn('[payphone/confirmar] verify API falló, usando status de URL:', errVerify)
-      // aprobado ya viene de aprobadoPorUrl
+    if (!aprobadoPorUrl) {
+      try {
+        const verificacion = await verificarPagoPayphone({ token: cfg.payphone_token, id, clientTransactionId })
+        console.log('[payphone/confirmar] verificacion API:', JSON.stringify(verificacion))
+        aprobado = verificacion.statusCode === 3 || verificacion.transactionStatus?.toLowerCase() === 'approved'
+      } catch (errVerify) {
+        console.warn('[payphone/confirmar] verify API falló:', errVerify)
+      }
     }
 
     if (!aprobado) {
-      console.error('[payphone/confirmar] pago no aprobado')
+      console.error('[payphone/confirmar] pago no aprobado, transactionStatus:', transactionStatus)
       return NextResponse.redirect(`${siteUrl}/carrito?error=pago_rechazado`)
     }
 
