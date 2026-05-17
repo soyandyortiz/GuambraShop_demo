@@ -573,6 +573,50 @@ payphone_payment_id TEXT   -- ID de transacción Payphone para trazabilidad
 
 ---
 
+## Meta Pixel + Google Analytics 4
+
+Permite medir tráfico, conversiones y ROAS de campañas publicitarias en Facebook/Instagram y Google.
+
+### Configuración (por cliente)
+
+1. Ir a **Panel admin → Perfil de tienda → tab Marketing**
+2. Ingresar el **Pixel ID** de Meta (ej. `123456789012345`)
+3. Ingresar el **ID de medición GA4** (ej. `G-XXXXXXXXXX`)
+4. Guardar — los scripts se activan de inmediato en toda la tienda
+
+### Dónde obtener cada ID
+
+| Herramienta | Ruta |
+|-------------|------|
+| Meta Pixel | Meta Business Suite → Administrador de eventos → Tu píxel → Configuración |
+| Google Analytics 4 | analytics.google.com → Admin → Flujos de datos → Tu sitio web → ID de medición |
+
+### Eventos que se rastrean automáticamente
+
+| Evento | Cuándo se dispara |
+|--------|-------------------|
+| `PageView` (Meta) | En cada carga de página |
+| `page_view` (GA4) | En cada navegación |
+| `Purchase` (Meta) | Al llegar a `/pedido/[numero]` tras completar una compra |
+| `purchase` (GA4) | Al llegar a `/pedido/[numero]` — incluye monto, moneda e ítems |
+
+### SQL para nuevo cliente
+
+```sql
+-- Migración _060: columnas de analytics en configuracion_tienda
+ALTER TABLE configuracion_tienda
+  ADD COLUMN IF NOT EXISTS meta_pixel_id        TEXT,
+  ADD COLUMN IF NOT EXISTS google_analytics_id  TEXT;
+```
+
+**Migración:** `supabase/migrations/20260516000060_analytics.sql`
+
+**Variables de entorno:** ninguna — los IDs se guardan en la base de datos del cliente.
+
+> **Nota:** Si la migración no se ha aplicado, los colores y tema de la tienda se mantienen intactos. Los scripts de analytics simplemente no se inyectan hasta que se ejecute la migración y se configuren los IDs.
+
+---
+
 ## Personalización visual
 
 Desde `/admin/dashboard/perfil` → pestaña **Colores**:
