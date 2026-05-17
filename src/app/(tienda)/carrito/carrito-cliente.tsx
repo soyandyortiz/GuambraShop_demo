@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
+const PayphoneCajita = lazy(() => import('@/components/tienda/payphone-cajita').then(m => ({ default: m.PayphoneCajita })))
 import Link from 'next/link'
 import {
   ShoppingCart, Trash2, Plus, Minus, Tag, Truck,
@@ -84,6 +85,7 @@ export function CarritoCliente({ whatsapp, nombreTienda, simboloMoneda, pais = '
   const [iniciandoTransferencia, setIniciandoTransferencia] = useState(false)
   const [metodoPago, setMetodoPago] = useState<'transferencia' | 'paypal' | 'payphone'>('transferencia')
   const [pagandoPayphone, setPagandoPayphone] = useState(false)
+  const [payphoneCfg, setPayphoneCfg]         = useState<{ clientTransactionId: string; amount: number; token: string; storeId: string | null } | null>(null)
 
   // Datos del cliente
   const [nombres, setNombres] = useState('')
@@ -487,13 +489,9 @@ export function CarritoCliente({ whatsapp, nombreTienda, simboloMoneda, pais = '
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildDatosPedido()),
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        toast.error(err.error || 'Error al iniciar el pago con Payphone.')
-        return
-      }
       const data = await res.json()
-      window.location.href = data.payWithCard
+      if (!res.ok) { toast.error(data.error || 'Error al iniciar Payphone.'); return }
+      setPayphoneCfg(data)   // muestra la Cajita embebida
     } catch {
       toast.error('Error al conectar con Payphone. Intenta nuevamente.')
     } finally {
@@ -1365,26 +1363,45 @@ export function CarritoCliente({ whatsapp, nombreTienda, simboloMoneda, pais = '
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[#00b1eb] text-white text-xs font-black">P</span>
                 Pagar con Payphone
               </p>
-              <p className="text-xs text-foreground-muted">
-                Serás redirigido a la página segura de Payphone para pagar con tarjeta de débito o crédito. Tu pedido se confirmará automáticamente.
-              </p>
-              <div className="flex items-center gap-2 bg-background-subtle rounded-xl px-3 py-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                <p className="text-xs text-foreground-muted">Acepta Visa y Mastercard · Pago 100% seguro · Encriptación SSL</p>
-              </div>
-              <button
-                onClick={pagarConPayphone}
-                disabled={pagandoPayphone}
-                className="w-full h-12 rounded-2xl bg-[#00b1eb] hover:bg-[#009ad0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
-              >
-                {pagandoPayphone
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Redirigiendo…</>
-                  : <>
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white text-[#00b1eb] text-xs font-black">P</span>
-                      Pagar {formatearPrecio(total, simboloMoneda)} con Payphone
-                    </>
-                }
-              </button>
+
+              {payphoneCfg ? (
+                /* ── Cajita embebida de Payphone ── */
+                <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-[#00b1eb]" /></div>}>
+                  <PayphoneCajita
+                    token={payphoneCfg.token}
+                    clientTransactionId={payphoneCfg.clientTransactionId}
+                    amount={payphoneCfg.amount}
+                    storeId={payphoneCfg.storeId}
+                    reference={`Pedido ${payphoneCfg.clientTransactionId}`}
+                    responseUrl={`${window.location.origin}/api/pedidos/payphone/confirmar`}
+                    cancellationUrl={`${window.location.origin}/carrito`}
+                  />
+                </Suspense>
+              ) : (
+                /* ── Botón inicial ── */
+                <>
+                  <p className="text-xs text-foreground-muted">
+                    Paga con tarjeta de débito o crédito directamente aquí. Tu pedido se confirmará automáticamente.
+                  </p>
+                  <div className="flex items-center gap-2 bg-background-subtle rounded-xl px-3 py-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    <p className="text-xs text-foreground-muted">Acepta Visa y Mastercard · Pago 100% seguro · Encriptación SSL</p>
+                  </div>
+                  <button
+                    onClick={pagarConPayphone}
+                    disabled={pagandoPayphone}
+                    className="w-full h-12 rounded-2xl bg-[#00b1eb] hover:bg-[#009ad0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
+                  >
+                    {pagandoPayphone
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparando…</>
+                      : <>
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white text-[#00b1eb] text-xs font-black">P</span>
+                          Pagar {formatearPrecio(total, simboloMoneda)} con Payphone
+                        </>
+                    }
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

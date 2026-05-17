@@ -1,14 +1,5 @@
-/**
- * POST /api/pedidos/payphone/crear-orden
- *
- * Recibe los datos completos del carrito, crea un pedido_temporal,
- * llama a la API de Payphone y devuelve { payWithCard } (URL de pago).
- * El pedido real se crea en /confirmar tras el redirect de Payphone.
- */
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { crearTransaccionPayphone } from '@/lib/payphone'
 
 function crearAdmin() {
   return createClient(
@@ -33,10 +24,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!cfg?.payphone_activo || !cfg.payphone_token) {
-      return NextResponse.json({ error: 'Payphone no está configurado en esta tienda.' }, { status: 422 })
+      return NextResponse.json({ error: 'Payphone no está configurado.' }, { status: 422 })
     }
 
-    // Guardar datos del carrito en temporal (30 min — suficiente para pagar)
+    // Guardar datos del carrito en temporal (30 min)
     const { data: temporal, error: errTemporal } = await admin
       .from('pedidos_temporales')
       .insert({
@@ -68,19 +59,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Error al preparar el pedido.' }, { status: 500 })
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? req.nextUrl.origin
-
-    const transaccion = await crearTransaccionPayphone({
-      token:               cfg.payphone_token,
-      amount:              Number(pedidoData.total),
+    // Devuelve la config al cliente — la Cajita llama a Payphone directamente desde el navegador
+    return NextResponse.json({
       clientTransactionId: temporal.numero_temporal,
-      responseUrl:         `${siteUrl}/api/pedidos/payphone/confirmar`,
-      cancellationUrl:     `${siteUrl}/carrito`,
-      storeId:             cfg.payphone_store_id,
-      reference:           `Pedido ${temporal.numero_temporal}`,
+      amount:   Math.round(Number(pedidoData.total) * 100), // centavos
+      token:    cfg.payphone_token,
+      storeId:  cfg.payphone_store_id ?? null,
     })
-
-    return NextResponse.json({ payWithCard: transaccion.payWithCard })
   } catch (err) {
     console.error('[payphone/crear-orden]', err)
     return NextResponse.json(
