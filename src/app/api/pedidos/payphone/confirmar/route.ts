@@ -46,21 +46,26 @@ export async function GET(req: NextRequest) {
   try {
     const admin = crearAdmin()
 
+    // 1. Config
     const { data: cfg } = await admin
       .from('configuracion_tienda')
       .select('payphone_token, nombre_tienda, whatsapp, simbolo_moneda')
       .single()
 
     if (!cfg?.payphone_token) {
+      console.error('[payphone/confirmar] sin token configurado')
       return NextResponse.redirect(`${siteUrl}/carrito?error=config`)
     }
 
-    // Verificar el pago con la API de Payphone (fuente de verdad)
-    const verificacion = await verificarPagoPayphone({
-      token: cfg.payphone_token,
-      id,
-      clientTransactionId,
-    })
+    // 2. Verificar pago con API Payphone (fuente de verdad)
+    let verificacion: Awaited<ReturnType<typeof verificarPagoPayphone>>
+    try {
+      verificacion = await verificarPagoPayphone({ token: cfg.payphone_token, id, clientTransactionId })
+      console.log('[payphone/confirmar] verificacion:', JSON.stringify(verificacion))
+    } catch (errVerify) {
+      console.error('[payphone/confirmar] error verify:', errVerify)
+      return NextResponse.redirect(`${siteUrl}/carrito?error=verificacion`)
+    }
 
     // statusCode 3 = Approved en Payphone
     const aprobado =
@@ -72,19 +77,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${siteUrl}/carrito?error=pago_rechazado`)
     }
 
-    // Buscar el pedido temporal
-    const { data: temporal } = await admin
+    // 3. Buscar pedido temporal
+    const { data: temporal, error: errTemporal } = await admin
       .from('pedidos_temporales')
       .select('*')
       .eq('numero_temporal', clientTransactionId)
       .maybeSingle()
 
+    console.log('[payphone/confirmar] temporal:', temporal?.numero_temporal ?? 'no encontrado', errTemporal)
+
     if (!temporal) {
-      // Ya procesado (doble redirect de Payphone)
+      // Ya procesado (doble redirect de Payphone) — redirigir a home
       return NextResponse.redirect(`${siteUrl}/?pago=payphone`)
     }
 
-    // Crear el pedido real
+    // 4. Crear pedido real
     const { data: pedido, error: errPedido } = await admin
       .from('pedidos')
       .insert({
@@ -104,7 +111,7 @@ export async function GET(req: NextRequest) {
         costo_envio:         temporal.costo_envio,
         total:               temporal.total,
         datos_facturacion:   temporal.datos_facturacion ?? null,
-        estado:              'pendiente_pago',
+        estado:              'pagado',
         forma_pago:          'payphone',
         payphone_payment_id: String(id),
       })
@@ -112,28 +119,32 @@ export async function GET(req: NextRequest) {
       .single()
 
     if (errPedido || !pedido) {
-      console.error('[payphone/confirmar] Pedido error:', errPedido)
+      console.error('[payphone/confirmar] error crear pedido:', errPedido)
       return NextResponse.redirect(`${siteUrl}/carrito?error=pedido`)
     }
 
-    // Confirmar → descuenta stock + confirma citas/alquileres
-    await admin.rpc('confirmar_pedido', { p_pedido_id: pedido.id })
+    console.log('[payphone/confirmar] pedido creado:', pedido.numero_orden)
 
-    // Incrementar uso de cupón (fire-and-forget)
+    // 5. Confirmar stock/citas — no-fatal si el RPC no existe
+    admin.rpc('confirmar_pedido', { p_pedido_id: pedido.id })
+      .then(({ error: e }) => { if (e) console.warn('[payphone/confirmar] rpc confirmar_pedido:', e.message) })
+      .catch((e) => console.warn('[payphone/confirmar] rpc confirmar_pedido catch:', e))
+
+    // 6. Cupón (fire-and-forget)
     if (temporal.cupon_codigo) {
-      admin.rpc('incrementar_uso_cupon', { p_codigo: temporal.cupon_codigo }).then(() => {})
+      admin.rpc('incrementar_uso_cupon', { p_codigo: temporal.cupon_codigo }).catch(() => {})
     }
 
-    // Limpiar temporal
-    await admin.from('pedidos_temporales').delete().eq('numero_temporal', clientTransactionId)
+    // 7. Limpiar temporal
+    admin.from('pedidos_temporales').delete().eq('numero_temporal', clientTransactionId).then(() => {})
 
-    // Notificaciones (fire-and-forget)
+    // 8. Notificaciones (fire-and-forget)
     notificarEmail(admin, pedido.numero_orden, temporal, cfg).catch(() => {})
     notificarTelegram(pedido.numero_orden, temporal, String(id)).catch(() => {})
 
     return NextResponse.redirect(`${siteUrl}/pedido/${pedido.numero_orden}?pago=payphone`)
   } catch (err) {
-    console.error('[payphone/confirmar]', err)
+    console.error('[payphone/confirmar] catch general:', err)
     return NextResponse.redirect(`${siteUrl}/carrito?error=interno`)
   }
 }
