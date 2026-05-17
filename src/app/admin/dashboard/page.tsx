@@ -36,6 +36,7 @@ export default async function PáginaDashboard() {
   const ahora      = new Date()
   const inicioMes  = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
   const hace28Dias = new Date(ahora.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString()
+  const hace56Dias = new Date(ahora.getTime() - 56 * 24 * 60 * 60 * 1000).toISOString()
   const hoy        = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString()
 
   const [
@@ -50,6 +51,7 @@ export default async function PáginaDashboard() {
     { data: pedidosPendientes },
     { data: pedidosRecientes },
     { data: pedidosDiarios },
+    { data: pedidosAnt },
     { data: pedidosItems },
     { data: productosStockBajo },
     { data: cfgEmail },
@@ -67,6 +69,7 @@ export default async function PáginaDashboard() {
     supabase.from('pedidos').select('id').eq('estado', 'pendiente_pago'),
     supabase.from('pedidos').select('id, numero_orden, nombres, total, estado, creado_en, tipo').order('creado_en', { ascending: false }).limit(6),
     supabase.from('pedidos').select('creado_en, total').gte('creado_en', hace28Dias).in('estado', ['procesando', 'completado']),
+    supabase.from('pedidos').select('total').gte('creado_en', hace56Dias).lt('creado_en', hace28Dias).in('estado', ['procesando', 'completado']),
     supabase.from('pedidos').select('items').gte('creado_en', hace28Dias).in('estado', ['procesando', 'completado']),
     supabase.from('productos').select('id, nombre, stock').eq('esta_activo', true).not('stock', 'is', null).lte('stock', 5).order('stock', { ascending: true }).limit(5),
     supabase.from('configuracion_email').select('proveedor, activo').maybeSingle(),
@@ -74,8 +77,10 @@ export default async function PáginaDashboard() {
     supabase.from('facturas').select('*', { count: 'exact', head: true }).gte('email_enviado_en', inicioMes),
   ])
 
-  const ingresosMes = pedidosMes?.reduce((s, p) => s + Number(p.total ?? 0), 0) ?? 0
-  const tiendaActiva = config?.esta_activa ?? true
+  const ingresosMes    = pedidosMes?.reduce((s, p) => s + Number(p.total ?? 0), 0) ?? 0
+  const totalAnterior  = pedidosAnt?.reduce((s, p) => s + Number(p.total ?? 0), 0) ?? 0
+  const tiendaActiva   = config?.esta_activa ?? true
+  const simboloMoneda  = (config as any)?.simbolo_moneda ?? '$'
 
   // Procesar datos para el gráfico (Lógica directa de servidor, sin useMemo)
   const diasMap: Record<string, number> = {}
@@ -140,10 +145,12 @@ export default async function PáginaDashboard() {
         
         {/* Gráfico Principal (8 columnas) */}
         <div className="lg:col-span-8 flex flex-col gap-4">
-          <GraficoVentasPremium 
-            datos={datosGrafico} 
-            titulo="Ingresos Diarios" 
-            subtitulo="Rendimiento de los últimos 28 días"
+          <GraficoVentasPremium
+            datos={datosGrafico}
+            totalAnterior={totalAnterior}
+            simboloMoneda={simboloMoneda}
+            titulo="Ingresos Diarios"
+            subtitulo="Últimos 28 días"
           />
           
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
