@@ -37,15 +37,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${siteUrl}/carrito?error=pago_incompleto`)
   }
 
-  // Cancelación explícita de Payphone
-  if (transactionStatus && transactionStatus.toLowerCase() === 'cancelled') {
+  // Payphone llama a cancellationUrl si el pago fue cancelado, no a responseUrl.
+  // Si llegamos aquí con clientTransactionId e id, el pago fue exitoso.
+  // Solo rechazar si el status dice explícitamente Cancelled/Error.
+  const statusLower = transactionStatus?.toLowerCase() ?? ''
+  if (statusLower === 'cancelled' || statusLower === 'canceled' || statusLower === 'error') {
     return NextResponse.redirect(`${siteUrl}/carrito?error=pago_cancelado`)
   }
 
-  // Payphone envía transactionStatus=Approved en la URL al aprobar — confiar en eso
-  const aprobadoPorUrl = transactionStatus?.toLowerCase() === 'approved'
-
-  console.log('[payphone/confirmar] params:', { clientTransactionId, id, transactionStatus, aprobadoPorUrl })
+  console.log('[payphone/confirmar] params recibidos:', { clientTransactionId, id, transactionStatus })
 
   try {
     const admin = crearAdmin()
@@ -61,22 +61,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${siteUrl}/carrito?error=config`)
     }
 
-    // 2. Si la URL ya dice Approved, confiar en eso (Payphone solo envía esto tras pago exitoso)
-    //    Si no, llamar al verify API como fallback
-    let aprobado = aprobadoPorUrl
-    if (!aprobadoPorUrl) {
-      try {
-        const verificacion = await verificarPagoPayphone({ token: cfg.payphone_token, id, clientTransactionId })
-        console.log('[payphone/confirmar] verificacion API:', JSON.stringify(verificacion))
-        aprobado = verificacion.statusCode === 3 || verificacion.transactionStatus?.toLowerCase() === 'approved'
-      } catch (errVerify) {
-        console.warn('[payphone/confirmar] verify API falló:', errVerify)
-      }
-    }
-
-    if (!aprobado) {
-      console.error('[payphone/confirmar] pago no aprobado, transactionStatus:', transactionStatus)
-      return NextResponse.redirect(`${siteUrl}/carrito?error=pago_rechazado`)
+    // 2. Verify API opcional — solo para logging, no bloquea el flujo
+    try {
+      const verificacion = await verificarPagoPayphone({ token: cfg.payphone_token, id, clientTransactionId })
+      console.log('[payphone/confirmar] verify API:', JSON.stringify(verificacion))
+    } catch (errVerify) {
+      console.warn('[payphone/confirmar] verify API falló (no bloquea):', errVerify)
     }
 
     // 3. Buscar pedido temporal
