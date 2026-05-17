@@ -37,8 +37,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${siteUrl}/carrito?error=pago_incompleto`)
   }
 
-  if (transactionStatus !== 'Approved') {
-    return NextResponse.redirect(`${siteUrl}/carrito?error=pago_rechazado`)
+  // Rechazar solo si Payphone explícitamente indica cancelación en la URL
+  // (no rechazar si transactionStatus está ausente — lo verificamos vía API)
+  if (transactionStatus && transactionStatus.toLowerCase() === 'cancelled') {
+    return NextResponse.redirect(`${siteUrl}/carrito?error=pago_cancelado`)
   }
 
   try {
@@ -53,14 +55,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${siteUrl}/carrito?error=config`)
     }
 
-    // Verificar el pago con Payphone
+    // Verificar el pago con la API de Payphone (fuente de verdad)
     const verificacion = await verificarPagoPayphone({
       token: cfg.payphone_token,
       id,
       clientTransactionId,
     })
 
-    if (verificacion.transactionStatus !== 'Approved') {
+    // statusCode 3 = Approved en Payphone
+    const aprobado =
+      verificacion.statusCode === 3 ||
+      verificacion.transactionStatus?.toLowerCase() === 'approved'
+
+    if (!aprobado) {
+      console.error('[payphone/confirmar] pago no aprobado:', verificacion)
       return NextResponse.redirect(`${siteUrl}/carrito?error=pago_rechazado`)
     }
 
