@@ -6,6 +6,7 @@ import {
 import Link from 'next/link'
 import { formatearPrecio } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { EventoCompra } from '@/components/analytics/evento-compra'
 
 type EstadoPedido = 'pendiente_pago' | 'procesando' | 'en_espera' | 'completado' | 'cancelado' | 'reembolsado' | 'fallido'
 
@@ -89,6 +90,17 @@ export default async function PáginaSeguimientoPedido({
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6 flex flex-col gap-5">
+
+      <EventoCompra
+        numeroOrden={pedido.numero_orden}
+        total={Number(pedido.total ?? 0)}
+        moneda={pedido.simbolo_moneda === '$' ? 'USD' : pedido.simbolo_moneda}
+        items={(pedido.items as any[] ?? []).map((it: any) => ({
+          nombre: it.nombre ?? '',
+          cantidad: it.cantidad ?? 1,
+          subtotal: it.subtotal ?? 0,
+        }))}
+      />
 
       {/* Volver */}
       <Link href="/" className="flex items-center gap-1.5 text-sm text-foreground-muted hover:text-primary transition-colors w-fit">

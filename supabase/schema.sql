@@ -143,6 +143,9 @@ create table configuracion_tienda (
   payphone_activo             boolean not null default false,
   payphone_token              text,
   payphone_store_id           text,
+  -- Analytics
+  meta_pixel_id               text,
+  google_analytics_id         text,
   -- Timestamps
   creado_en                   timestamptz default now(),
   actualizado_en              timestamptz default now(),

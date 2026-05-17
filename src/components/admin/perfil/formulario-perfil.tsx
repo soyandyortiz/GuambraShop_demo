@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Loader2, Save, Plus, Trash2, Store, Image as ImageIcon, MapPin, Share2, User, Star, Palette, Hash, Eye, EyeOff, Lock, Pencil, GripVertical, Calendar, CreditCard, Landmark, Clock, Users } from 'lucide-react'
+import { Loader2, Save, Plus, Trash2, Store, Image as ImageIcon, MapPin, Share2, User, Star, Palette, Hash, Eye, EyeOff, Lock, Pencil, GripVertical, Calendar, CreditCard, Landmark, Clock, Users, BarChart2 } from 'lucide-react'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
 import { SubidorImagenes } from '@/components/ui/subidor-imagenes'
 import { cn } from '@/lib/utils'
@@ -159,6 +159,7 @@ const TABS = [
   { id: 'horario',     label: 'Horario',         icon: Clock      },
   { id: 'citas',       label: 'Citas',           icon: Calendar   },
   { id: 'pagos',       label: 'Métodos de pago', icon: CreditCard },
+  { id: 'marketing',   label: 'Marketing',       icon: BarChart2  },
   { id: 'imagenes',    label: 'Imágenes',        icon: ImageIcon  },
   { id: 'colores',     label: 'Colores',         icon: Palette    },
   { id: 'direcciones', label: 'Direcciones',     icon: MapPin     },
@@ -216,6 +217,7 @@ export function FormularioPerfil({ config, direcciones: dirInic, redes: redesIni
         {tab === 'horario'     && <TabHorario config={config} />}
         {tab === 'citas'       && <TabCitas config={config} empleadosInic={empleadosInic} />}
         {tab === 'pagos'       && <TabMetodosPago metodosPagoInic={metodosPagoInic} configId={config.id} paypalConfigInic={{ activo: config.paypal_activo ?? false, client_id: config.paypal_client_id ?? null, secret: config.paypal_secret ?? null, modo: config.paypal_modo ?? 'sandbox' }} payphoneConfigInic={{ activo: (config as any).payphone_activo ?? false, token: (config as any).payphone_token ?? null, store_id: (config as any).payphone_store_id ?? null }} esSuperAdmin={rol === 'superadmin'} />}
+        {tab === 'marketing'   && <TabMarketing configId={config.id} pixelInic={(config as any).meta_pixel_id ?? ''} gaInic={(config as any).google_analytics_id ?? ''} />}
         {tab === 'imagenes'    && <TabImagenes config={config} />}
         {tab === 'colores'     && <TabColores config={config} />}
         {tab === 'direcciones' && <TabDirecciones direccionesInic={dirInic} />}
@@ -1960,5 +1962,99 @@ function BtnGuardar({
         </div>
       )}
     </button>
+  )
+}
+
+// ─── Tab Marketing ────────────────────────────────────────────
+function TabMarketing({ configId, pixelInic, gaInic }: { configId: string; pixelInic: string; gaInic: string }) {
+  const [pixel, setPixel] = useState(pixelInic)
+  const [ga, setGa]       = useState(gaInic)
+  const [guardando, setGuardando] = useState(false)
+
+  async function guardar() {
+    setGuardando(true)
+    const supabase = crearClienteSupabase()
+    const { error } = await supabase
+      .from('configuracion_tienda')
+      .update({
+        meta_pixel_id:        pixel.trim() || null,
+        google_analytics_id:  ga.trim() || null,
+      })
+      .eq('id', configId)
+    setGuardando(false)
+    if (error) { toast.error('Error al guardar'); return }
+    toast.success('Configuración de marketing guardada')
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="font-semibold text-foreground">Marketing y Analytics</h2>
+        <p className="text-xs text-foreground-muted mt-0.5">Conecta tu tienda con herramientas de medición</p>
+      </div>
+
+      {/* Meta Pixel */}
+      <div className="flex flex-col gap-4 p-4 rounded-xl bg-background-subtle border border-border">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-[#1877F2]/10 flex items-center justify-center">
+            <svg className="w-4 h-4 text-[#1877F2]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Meta Pixel (Facebook/Instagram)</p>
+            <p className="text-xs text-foreground-muted">Mide conversiones de tus anuncios</p>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1">Pixel ID</label>
+          <input
+            type="text"
+            value={pixel}
+            onChange={e => setPixel(e.target.value)}
+            placeholder="ej. 123456789012345"
+            className="w-full px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+          />
+          <p className="text-xs text-foreground-muted mt-1">Encuéntralo en Meta Business → Administrador de eventos → Tu pixel → Configuración</p>
+        </div>
+      </div>
+
+      {/* Google Analytics */}
+      <div className="flex flex-col gap-4 p-4 rounded-xl bg-background-subtle border border-border">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-[#E8710A]/10 flex items-center justify-center">
+            <svg className="w-4 h-4 text-[#E8710A]" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M22.84 2.998C21.345 1.5 19.311.666 17.09.666c-2.22 0-4.255.834-5.749 2.332L7.014 7.326 2.998 11.34A8.126 8.126 0 0 0 .666 17.09c0 2.22.834 4.255 2.332 5.749C4.494 24.334 6.528 25 8.75 25c2.22 0 4.255-.834 5.749-2.332l4.327-4.318 4.016-4.014C24.334 12.843 25 10.81 25 8.588c0-2.22-.834-4.255-2.16-5.59zM12.5 16.5a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Google Analytics 4</p>
+            <p className="text-xs text-foreground-muted">Analítica de tráfico y comportamiento</p>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1">ID de medición (GA4)</label>
+          <input
+            type="text"
+            value={ga}
+            onChange={e => setGa(e.target.value)}
+            placeholder="ej. G-XXXXXXXXXX"
+            className="w-full px-3 py-2 text-sm rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+          />
+          <p className="text-xs text-foreground-muted mt-1">Encuéntralo en Google Analytics → Admin → Flujos de datos → Tu flujo web → ID de medición</p>
+        </div>
+      </div>
+
+      <div className="pt-1">
+        <button
+          onClick={guardar}
+          disabled={guardando}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-hover disabled:opacity-50"
+        >
+          {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Guardar
+        </button>
+      </div>
+    </div>
   )
 }

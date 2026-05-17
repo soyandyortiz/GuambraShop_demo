@@ -6,6 +6,8 @@ import { Toaster } from 'sonner'
 import { crearClienteServidor } from '@/lib/supabase/servidor'
 import { obtenerPaleta } from '@/lib/paletas'
 import { obtenerTema } from '@/lib/temas'
+import { GoogleAnalytics } from '@/components/analytics/google-analytics'
+import { MetaPixel } from '@/components/analytics/meta-pixel'
 import './globals.css'
 
 const geist = Geist({
@@ -58,12 +60,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const supabase = await crearClienteServidor()
   const { data: config } = await supabase
     .from('configuracion_tienda')
-    .select('color_primario, tema_id, favicon_url')
+    .select('color_primario, tema_id, favicon_url, meta_pixel_id, google_analytics_id')
     .single()
 
   const paleta = obtenerPaleta(config?.color_primario)
   const tema   = obtenerTema(config?.tema_id)
-  const faviconUrl = config?.favicon_url ?? '/favicon-default.svg'
+  const faviconUrl      = config?.favicon_url ?? '/favicon-default.svg'
+  const gaId            = (config as any)?.google_analytics_id as string | null ?? null
+  const metaPixelId     = (config as any)?.meta_pixel_id as string | null ?? null
 
   return (
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth"
@@ -83,6 +87,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="icon" href={faviconUrl} />
         <link rel="shortcut icon" href={faviconUrl} />
       </head>
+      {gaId        && <GoogleAnalytics id={gaId} />}
+      {metaPixelId && <MetaPixel id={metaPixelId} />}
       <body className="min-h-screen bg-background text-foreground antialiased" suppressHydrationWarning>
         <CarritoProvider>
           <FavoritosProvider>
