@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
         costo_envio:         temporal.costo_envio,
         total:               temporal.total,
         datos_facturacion:   temporal.datos_facturacion ?? null,
-        estado:              'pagado',
+        estado:              'procesando',
         forma_pago:          'payphone',
         payphone_payment_id: String(id),
       })
