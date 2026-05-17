@@ -58,38 +58,37 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await crearClienteServidor()
+  // select('*') nunca falla por columnas faltantes — si la migración de analytics
+  // no se ha aplicado aún, meta_pixel_id / google_analytics_id simplemente no aparecen.
   const { data: config } = await supabase
     .from('configuracion_tienda')
-    .select('color_primario, tema_id, favicon_url, meta_pixel_id, google_analytics_id')
+    .select('*')
     .single()
 
-  const paleta = obtenerPaleta(config?.color_primario)
-  const tema   = obtenerTema(config?.tema_id)
-  const faviconUrl      = config?.favicon_url ?? '/favicon-default.svg'
-  const gaId            = (config as any)?.google_analytics_id as string | null ?? null
-  const metaPixelId     = (config as any)?.meta_pixel_id as string | null ?? null
+  const paleta      = obtenerPaleta((config as any)?.color_primario)
+  const tema        = obtenerTema((config as any)?.tema_id)
+  const faviconUrl  = (config as any)?.favicon_url ?? '/favicon-default.svg'
+  const gaId        = (config as any)?.google_analytics_id as string | null ?? null
+  const metaPixelId = (config as any)?.meta_pixel_id as string | null ?? null
 
   return (
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth"
       className={geist.variable}
       style={{
-        // Variables del tema base (fondos, textos, bordes, cards)
         ...tema.vars,
-        // Variables del color de acento (primary)
         '--primary': paleta.primary,
         '--primary-hover': paleta.hover,
         '--primary-foreground': paleta.foreground,
         '--input-focus': paleta.primary,
         '--danger': paleta.primary === '#ef4444' ? '#dc2626' : '#ef4444',
       } as React.CSSProperties}>
-      {/* Favicon inyectado directamente para evitar <link rel="preload"> de Next.js con URLs externas */}
       <head>
         <link rel="icon" href={faviconUrl} />
         <link rel="shortcut icon" href={faviconUrl} />
       </head>
+      <body className="min-h-screen bg-background text-foreground antialiased" suppressHydrationWarning>
       {gaId        && <GoogleAnalytics id={gaId} />}
       {metaPixelId && <MetaPixel id={metaPixelId} />}
-      <body className="min-h-screen bg-background text-foreground antialiased" suppressHydrationWarning>
         <CarritoProvider>
           <FavoritosProvider>
             {children}
