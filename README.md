@@ -617,6 +617,62 @@ ALTER TABLE configuracion_tienda
 
 ---
 
+## Monitor de límites (Supabase)
+
+El panel admin incluye monitoreo en tiempo real de los límites del plan gratuito de Supabase en `/admin/dashboard/almacenamiento`.
+
+### Métricas monitoreadas
+
+| Métrica | Límite plan gratuito | Fuente |
+|---|---|---|
+| Base de datos PostgreSQL | 500 MB | `pg_database_size()` — tiempo real |
+| Archivos e imágenes (Storage) | 1 GB | Supabase Storage API |
+
+### Niveles de alerta
+
+- **Verde** — uso normal (< 70% archivos, < 75% BD)
+- **Amarillo** — espacio limitado (≥ 70% archivos, ≥ 75% BD)
+- **Rojo** — crítico (≥ 90%) — riesgo de bloqueo
+
+Cuando hay alerta, aparece un banner en todas las páginas del dashboard con enlace a la sección de almacenamiento.
+
+### Notificación Telegram
+
+Desde `/admin/dashboard/almacenamiento` → botón **Verificar límites** envía una alerta al grupo de Telegram configurado si algún límite supera el umbral. Requiere `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+
+### SQL requerido por cliente
+
+Las siguientes funciones deben existir en cada proyecto Supabase. Están incluidas en `schema_completo.sql` — si el cliente ya tiene el schema aplicado, ejecutar manualmente:
+
+```sql
+-- Tamaño de la base de datos
+CREATE OR REPLACE FUNCTION public.obtener_tamano_db()
+RETURNS bigint LANGUAGE sql SECURITY DEFINER SET search_path = public
+AS $$ SELECT pg_database_size(current_database())::bigint; $$;
+
+REVOKE ALL ON FUNCTION public.obtener_tamano_db() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.obtener_tamano_db() TO service_role;
+
+-- Uso de storage por bucket
+CREATE OR REPLACE FUNCTION public.obtener_uso_storage()
+RETURNS TABLE (bucket_id text, total_bytes bigint, total_archivos bigint)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = storage, public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT o.bucket_id,
+    COALESCE(SUM((o.metadata->>'size')::bigint), 0)::bigint,
+    COUNT(*)::bigint
+  FROM storage.objects o GROUP BY o.bucket_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.obtener_uso_storage() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.obtener_uso_storage() TO service_role;
+```
+
+---
+
 ## Personalización visual
 
 Desde `/admin/dashboard/perfil` → pestaña **Colores**:
