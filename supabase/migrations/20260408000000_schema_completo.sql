@@ -512,3 +512,46 @@ create policy "publico_ver_promociones_activas" on promociones
 create policy "admin_gestionar_promociones" on promociones
   for all using (obtener_rol() in ('admin', 'superadmin'));
 
+
+
+-- ────────────────────────────────────────────
+-- FUNCIONES DE MONITOREO
+-- ────────────────────────────────────────────
+
+-- Uso de storage por bucket (solo service_role)
+CREATE OR REPLACE FUNCTION public.obtener_uso_storage()
+RETURNS TABLE (
+  bucket_id      text,
+  total_bytes    bigint,
+  total_archivos bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = storage, public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    o.bucket_id,
+    COALESCE(SUM((o.metadata->>'size')::bigint), 0)::bigint AS total_bytes,
+    COUNT(*)::bigint                                          AS total_archivos
+  FROM storage.objects o
+  GROUP BY o.bucket_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.obtener_uso_storage() FROM public, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.obtener_uso_storage() TO service_role;
+
+-- Tamaño actual de la base de datos en bytes (solo service_role)
+CREATE OR REPLACE FUNCTION public.obtener_tamano_db()
+RETURNS bigint
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT pg_database_size(current_database())::bigint;
+$$;
+
+REVOKE ALL ON FUNCTION public.obtener_tamano_db() FROM public, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.obtener_tamano_db() TO service_role;
