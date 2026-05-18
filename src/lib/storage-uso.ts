@@ -1,6 +1,7 @@
 import { crearClienteAdmin } from './supabase/admin'
 
-export const LIMITE_STORAGE_BYTES = 1_073_741_824 // 1 GB — plan gratuito Supabase
+export const LIMITE_STORAGE_BYTES = 1_073_741_824 // 1 GB — file storage plan gratuito Supabase
+export const LIMITE_DB_BYTES      =   524_288_000 // 500 MB — database plan gratuito Supabase
 
 export interface BucketUso {
   id: string
@@ -23,6 +24,29 @@ const META_BUCKET: Record<string, { nombre: string; icono: string }> = {
   imagenes:     { nombre: 'Imágenes de productos', icono: '🖼️' },
   facturacion:  { nombre: 'Facturas PDF/XML',       icono: '📄' },
   comprobantes: { nombre: 'Comprobantes de pago',   icono: '🧾' },
+}
+
+export interface DBUso {
+  bytes: number
+  porcentaje: number
+  nivel: 'ok' | 'advertencia' | 'critico'
+}
+
+export async function obtenerUsoDB(): Promise<DBUso> {
+  const admin = crearClienteAdmin()
+  const { data, error } = await admin.rpc('obtener_tamano_db')
+
+  if (error || data === null) {
+    return { bytes: 0, porcentaje: 0, nivel: 'ok' }
+  }
+
+  const bytes = Number(data)
+  const porcentaje = Math.min(100, (bytes / LIMITE_DB_BYTES) * 100)
+  const nivel: DBUso['nivel'] =
+    porcentaje >= 90 ? 'critico' :
+    porcentaje >= 75 ? 'advertencia' : 'ok'
+
+  return { bytes, porcentaje, nivel }
 }
 
 export function formatearBytes(bytes: number): string {

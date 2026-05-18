@@ -1,19 +1,20 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Search, ChevronDown, Users, ShoppingBag, MapPin, Mail, Phone,
   MessageCircle, ArrowUpDown, Package, Clock, CheckCircle2,
   RotateCcw, Send, XCircle, Pencil, Trash2, UserPlus, FileText,
   Receipt, CreditCard, Globe, Eye, ExternalLink,
-  ShieldCheck, UserCheck, TrendingUp, Calendar
+  ShieldCheck, UserCheck, TrendingUp, Calendar, Download, Loader2,
 } from 'lucide-react'
 import { cn, formatearPrecio } from '@/lib/utils'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
 import { toast } from 'sonner'
 import { FormularioCliente } from './formulario-cliente'
 import type { Cliente, EstadoPedido } from '@/types'
+import { PaginacionAdmin } from '@/components/ui/paginacion-admin'
 
 export interface PedidoResumen {
   numero_orden: string
@@ -32,6 +33,10 @@ export interface ClienteConPedidos extends Cliente {
 
 interface Props {
   clientes: ClienteConPedidos[]
+  total: number
+  pagina: number
+  porPagina: number
+  filtros: { q: string }
   simboloMoneda: string
   pais?: string
 }
@@ -78,28 +83,24 @@ const ETIQUETAS_ESTADO: Record<EstadoPedido, string> = {
   fallido:              'Fallido',
 }
 
-export function TablaClientes({ clientes, simboloMoneda, pais = 'EC' }: Props) {
+const BASE = '/admin/dashboard/clientes'
+
+export function TablaClientes({ clientes, total, pagina, porPagina, filtros, simboloMoneda, pais = 'EC' }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const [busqueda, setBusqueda]           = useState('')
+  const [inputBusqueda, setInputBusqueda] = useState(filtros.q)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [orden, setOrden]                 = useState<OrdenSort>('reciente')
   const [modalAbierto, setModalAbierto]   = useState(false)
   const [clienteEditar, setClienteEditar] = useState<Cliente | undefined>()
   const [detallesId, setDetallesId]       = useState<string | null>(null)
+  const [exportando, setExportando]       = useState(false)
 
+  useEffect(() => { setInputBusqueda(filtros.q) }, [filtros.q])
+
+  // Client-side sort only (ordering on computed fields)
   const filtrados = useMemo(() => {
-    const texto = busqueda.toLowerCase().trim()
-    const result = clientes.filter(c => {
-      if (!texto) return true
-      return (
-        c.razon_social.toLowerCase().includes(texto) ||
-        c.identificacion.includes(texto) ||
-        (c.email ?? '').toLowerCase().includes(texto) ||
-        (c.telefono ?? '').includes(texto) ||
-        (c.ciudad ?? '').toLowerCase().includes(texto)
-      )
-    })
-    return [...result].sort((a, b) => {
+    return [...clientes].sort((a, b) => {
       switch (orden) {
         case 'reciente': {
           const ta = a.ultimo_pedido_en ? new Date(a.ultimo_pedido_en).getTime() : new Date(a.creado_en).getTime()
@@ -111,7 +112,50 @@ export function TablaClientes({ clientes, simboloMoneda, pais = 'EC' }: Props) {
         case 'nombre':   return a.razon_social.localeCompare(b.razon_social)
       }
     })
-  }, [clientes, busqueda, orden])
+  }, [clientes, orden])
+
+  function buildUrl(overrides: { q?: string; p?: number }) {
+    const merged = { q: filtros.q, p: pagina, ...overrides }
+    const params = new URLSearchParams()
+    if (merged.q) params.set('q', merged.q)
+    if (merged.p > 1) params.set('p', String(merged.p))
+    const qs = params.toString()
+    return qs ? `${BASE}?${qs}` : BASE
+  }
+
+  function irAPagina(p: number) {
+    startTransition(() => router.replace(buildUrl({ p })))
+  }
+
+  function onCambioBusqueda(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    setInputBusqueda(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      startTransition(() => router.replace(buildUrl({ q: val, p: 1 })))
+    }, 400)
+  }
+
+  async function exportarCSV() {
+    setExportando(true)
+    try {
+      const params = new URLSearchParams()
+      if (filtros.q) params.set('q', filtros.q)
+      const res = await fetch(`/api/admin/exportar/clientes?${params}`)
+      if (!res.ok) { toast.error('Error al exportar'); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `clientes-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Error al exportar')
+    } finally {
+      setExportando(false)
+    }
+  }
 
   function abrirNuevo() {
     setClienteEditar(undefined)
@@ -143,8 +187,8 @@ export function TablaClientes({ clientes, simboloMoneda, pais = 'EC' }: Props) {
             <input
               type="text"
               placeholder="Buscar por nombre, identificación, email o ciudad..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
+              value={inputBusqueda}
+              onChange={onCambioBusqueda}
               className="w-full h-10 pl-10 pr-4 rounded-xl border border-input-border bg-background-subtle text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -164,6 +208,14 @@ export function TablaClientes({ clientes, simboloMoneda, pais = 'EC' }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={exportarCSV}
+            disabled={exportando}
+            className="h-10 px-4 rounded-xl border border-border bg-card text-sm font-medium flex items-center gap-1.5 hover:bg-background-subtle transition-all disabled:opacity-50"
+          >
+            {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span className="hidden sm:inline">CSV</span>
+          </button>
           <button
             onClick={abrirNuevo}
             className="h-10 px-6 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2"
@@ -288,6 +340,13 @@ export function TablaClientes({ clientes, simboloMoneda, pais = 'EC' }: Props) {
           </table>
         </div>
       </div>
+
+      <PaginacionAdmin
+        total={total}
+        porPagina={porPagina}
+        pagina={pagina}
+        onPaginar={irAPagina}
+      />
 
       {/* ══ MODAL DE DETALLES DEL CLIENTE ══ */}
       {detallesId && (

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useTransition, useMemo, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import {
-  Search, Truck, Store, ChevronDown, ChevronUp,
+  Search, Truck, Store, ChevronDown,
   Package, Phone, Mail, MapPin, Download, ShoppingBag,
   Calendar, MessageCircle, X, Clock, CheckCircle2,
   RotateCcw, XCircle, Send, ArrowUpDown, FileText, Loader2,
@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { cn, formatearPrecio } from '@/lib/utils'
 import { imprimirTicket, type ConfigTicket } from '@/lib/ticket'
 import type { Pedido, EstadoPedido } from '@/types'
+import { PaginacionAdmin } from '@/components/ui/paginacion-admin'
 
 const ESTADOS: Record<EstadoPedido, { etiqueta: string; color: string; icono: React.ReactNode }> = {
   pendiente_pago:        { etiqueta: 'Pendiente de pago',    color: 'bg-gray-100 text-gray-600 border-gray-200',     icono: <Clock className="w-3 h-3" /> },
@@ -31,30 +32,59 @@ type FiltroEstado = EstadoPedido | 'todos'
 type FiltroFecha  = 'todos' | 'hoy' | 'semana' | 'mes'
 type OrdenSort    = 'reciente' | 'antiguo' | 'mayor' | 'menor'
 
+interface Filtros {
+  q: string
+  tipo: string
+  estado: string
+  fecha: string
+  orden: string
+}
+
 interface Props {
   pedidos: Pedido[]
+  total: number
+  pagina: number
+  porPagina: number
+  filtros: Filtros
+  conteoEstados: Record<string, number>
   configTicket: ConfigTicket
 }
 
-export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
+const BASE = '/admin/dashboard/pedidos'
+
+export function TablaPedidos({
+  pedidos: pedidosInic,
+  total,
+  pagina,
+  porPagina,
+  filtros,
+  conteoEstados,
+  configTicket,
+}: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const [pedidos, setPedidos]         = useState<Pedido[]>(pedidosInic)
-  const [busqueda, setBusqueda]       = useState('')
-  const [filtroTipo, setFiltroTipo]   = useState<FiltroTipo>('todos')
-  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('todos')
-  const [filtroFecha, setFiltroFecha] = useState<FiltroFecha>('todos')
-  const [ordenSort, setOrdenSort]     = useState<OrdenSort>('reciente')
-  const [modalPedido, setModalPedido] = useState<Pedido | null>(null)
+  const [pedidos, setPedidos]           = useState<Pedido[]>(pedidosInic)
+  const [inputBusqueda, setInputBusqueda] = useState(filtros.q)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [modalPedido, setModalPedido]   = useState<Pedido | null>(null)
   const [actualizando, setActualizando] = useState<string | null>(null)
   const [emitiendoFactura, setEmitiendoFactura] = useState<string | null>(null)
   const [seleccionados, setSeleccionados] = useState<string[]>([])
-  
-  // pedidoId → { facturaId, estado, numeroFactura, numeroAutorizacion, errorSri }
+  const [exportando, setExportando]     = useState(false)
+
   type InfoFactura = { facturaId: string; estado: string; numeroFactura?: string; numeroAutorizacion?: string; errorSri?: string }
   const [facturasEmitidas, setFacturasEmitidas] = useState<Record<string, InfoFactura>>({})
 
-  // Carga facturas existentes
+  useEffect(() => {
+    setPedidos(pedidosInic)
+    setSeleccionados([])
+  }, [pedidosInic])
+
+  useEffect(() => {
+    const ids = pedidosInic.map(p => p.id)
+    cargarFacturas(ids)
+  }, [pedidosInic])
+
   function cargarFacturas(ids: string[]) {
     if (ids.length === 0) return
     const supabase = crearClienteSupabase()
@@ -81,11 +111,52 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
       })
   }
 
-  useEffect(() => {
-    const ids = pedidosInic.map(p => p.id)
-    cargarFacturas(ids)
-  }, [pedidosInic])
+  // ── Navegación por URL ──────────────────────────────────────────
+  function buildUrl(overrides: Partial<Filtros & { p: number }>) {
+    const merged = {
+      q:      filtros.q,
+      tipo:   filtros.tipo,
+      estado: filtros.estado,
+      fecha:  filtros.fecha,
+      orden:  filtros.orden,
+      p:      pagina,
+      ...overrides,
+    }
+    const params = new URLSearchParams()
+    if (merged.q)              params.set('q',      merged.q)
+    if (merged.tipo   !== 'todos') params.set('tipo',   merged.tipo)
+    if (merged.estado !== 'todos') params.set('estado', merged.estado)
+    if (merged.fecha  !== 'todos') params.set('fecha',  merged.fecha)
+    if (merged.orden  !== 'reciente') params.set('orden', merged.orden)
+    if (merged.p > 1)          params.set('p',      String(merged.p))
+    const qs = params.toString()
+    return qs ? `${BASE}?${qs}` : BASE
+  }
 
+  function actualizarFiltro(nombre: keyof Filtros, valor: string) {
+    startTransition(() => router.replace(buildUrl({ [nombre]: valor, p: 1 })))
+  }
+
+  function irAPagina(p: number) {
+    startTransition(() => router.replace(buildUrl({ p })))
+  }
+
+  function limpiarFiltros() {
+    setInputBusqueda('')
+    startTransition(() => router.replace(BASE))
+  }
+
+  // Búsqueda con debounce de 400ms
+  function onCambioBusqueda(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    setInputBusqueda(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      startTransition(() => router.replace(buildUrl({ q: val, p: 1 })))
+    }, 400)
+  }
+
+  // ── Facturación ────────────────────────────────────────────────
   async function emitirFactura(pedidoId: string) {
     setEmitiendoFactura(pedidoId)
     try {
@@ -126,58 +197,7 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
     }
   }
 
-  // Filtrado y ordenamiento
-  const filtrados = useMemo(() => {
-    const ahora = new Date()
-    const inicioHoy    = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
-    const inicioSemana = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const inicioMes    = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
-
-    let result = pedidos.filter(p => {
-      if (filtroTipo !== 'todos' && p.tipo !== filtroTipo) return false
-      if (filtroEstado !== 'todos' && p.estado !== filtroEstado) return false
-      if (filtroFecha !== 'todos') {
-        const f = new Date(p.creado_en)
-        if (filtroFecha === 'hoy'    && f < inicioHoy)    return false
-        if (filtroFecha === 'semana' && f < inicioSemana) return false
-        if (filtroFecha === 'mes'    && f < inicioMes)    return false
-      }
-      const texto = busqueda.toLowerCase()
-      if (texto) {
-        return (
-          p.numero_orden.toLowerCase().includes(texto) ||
-          p.nombres.toLowerCase().includes(texto) ||
-          p.email.toLowerCase().includes(texto) ||
-          p.whatsapp.includes(texto)
-        )
-      }
-      return true
-    })
-
-    result = [...result].sort((a, b) => {
-      switch (ordenSort) {
-        case 'reciente': return new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime()
-        case 'antiguo':  return new Date(a.creado_en).getTime() - new Date(b.creado_en).getTime()
-        case 'mayor':    return b.total - a.total
-        case 'menor':    return a.total - b.total
-        default: return 0
-      }
-    })
-    return result
-  }, [pedidos, filtroTipo, filtroEstado, filtroFecha, busqueda, ordenSort])
-
-  // Stats para las pestañas
-  const counts = useMemo(() => {
-    return {
-      todos: pedidos.length,
-      pendiente_validacion: pedidos.filter(p => p.estado === 'pendiente_validacion').length,
-      procesando: pedidos.filter(p => p.estado === 'procesando').length,
-      en_espera: pedidos.filter(p => p.estado === 'en_espera').length,
-      completado: pedidos.filter(p => p.estado === 'completado').length,
-      cancelado: pedidos.filter(p => p.estado === 'cancelado').length,
-    }
-  }, [pedidos])
-
+  // ── Cambio de estado ────────────────────────────────────────────
   async function cambiarEstado(id: string, nuevoEstado: EstadoPedido) {
     setActualizando(id)
     const supabase = crearClienteSupabase()
@@ -202,6 +222,7 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
     startTransition(() => router.refresh())
   }
 
+  // ── Acciones masivas ────────────────────────────────────────────
   async function ejecutarAccionMasiva(accion: 'completado' | 'cancelado' | 'eliminar') {
     if (seleccionados.length === 0) return
     if (accion === 'eliminar' && !confirm(`¿Estás seguro de eliminar ${seleccionados.length} pedidos?`)) return
@@ -232,36 +253,60 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
   }
 
   function seleccionarTodos() {
-    if (seleccionados.length === filtrados.length) setSeleccionados([])
-    else setSeleccionados(filtrados.map(p => p.id))
+    if (seleccionados.length === pedidos.length) setSeleccionados([])
+    else setSeleccionados(pedidos.map(p => p.id))
   }
 
-  function limpiarFiltros() {
-    setBusqueda(''); setFiltroTipo('todos'); setFiltroEstado('todos'); setFiltroFecha('todos')
+  // ── Exportar CSV ────────────────────────────────────────────────
+  async function exportarCSV() {
+    setExportando(true)
+    try {
+      const params = new URLSearchParams()
+      if (filtros.q)                  params.set('q',      filtros.q)
+      if (filtros.tipo   !== 'todos') params.set('tipo',   filtros.tipo)
+      if (filtros.estado !== 'todos') params.set('estado', filtros.estado)
+      if (filtros.fecha  !== 'todos') params.set('fecha',  filtros.fecha)
+      if (filtros.orden  !== 'reciente') params.set('orden', filtros.orden)
+      const res = await fetch(`/api/admin/exportar/pedidos?${params}`)
+      if (!res.ok) { toast.error('Error al exportar'); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `pedidos-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Error al exportar')
+    } finally {
+      setExportando(false)
+    }
   }
+
+  const hayFiltros = filtros.q || filtros.tipo !== 'todos' || filtros.estado !== 'todos' || filtros.fecha !== 'todos'
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ══ PESTAÑAS DE ESTADO (Estilo WooCommerce) ══ */}
+      {/* ══ PESTAÑAS DE ESTADO ══ */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs border-b border-border pb-1">
         {[
-          { id: 'todos',                label: 'Todos',               count: counts.todos },
-          { id: 'pendiente_validacion', label: 'Por validar',         count: counts.pendiente_validacion },
-          { id: 'procesando',           label: 'Procesando',          count: counts.procesando },
-          { id: 'en_espera',            label: 'En espera',           count: counts.en_espera },
-          { id: 'completado',           label: 'Completados',         count: counts.completado },
-          { id: 'cancelado',            label: 'Cancelados',          count: counts.cancelado },
+          { id: 'todos',                label: 'Todos',       count: conteoEstados.todos },
+          { id: 'pendiente_validacion', label: 'Por validar', count: conteoEstados.pendiente_validacion },
+          { id: 'procesando',           label: 'Procesando',  count: conteoEstados.procesando },
+          { id: 'en_espera',            label: 'En espera',   count: conteoEstados.en_espera },
+          { id: 'completado',           label: 'Completados', count: conteoEstados.completado },
+          { id: 'cancelado',            label: 'Cancelados',  count: conteoEstados.cancelado },
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setFiltroEstado(tab.id as FiltroEstado)}
+            onClick={() => actualizarFiltro('estado', tab.id)}
             className={cn(
               'pb-2 px-1 transition-all relative font-medium',
-              filtroEstado === tab.id ? 'text-primary' : 'text-foreground-muted hover:text-foreground'
+              filtros.estado === tab.id ? 'text-primary' : 'text-foreground-muted hover:text-foreground'
             )}
           >
-            {tab.label} <span className="opacity-50">({tab.count})</span>
-            {filtroEstado === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
+            {tab.label} <span className="opacity-50">({tab.count ?? 0})</span>
+            {filtros.estado === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
           </button>
         ))}
       </div>
@@ -283,8 +328,8 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
 
           {/* Filtro Fecha */}
           <select
-            value={filtroFecha}
-            onChange={(e) => setFiltroFecha(e.target.value as FiltroFecha)}
+            value={filtros.fecha}
+            onChange={(e) => actualizarFiltro('fecha', e.target.value)}
             className="h-9 px-3 rounded-lg bg-card border border-border text-xs font-medium focus:outline-none appearance-none cursor-pointer"
           >
             <option value="todos">Todas las fechas</option>
@@ -295,8 +340,8 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
 
           {/* Filtro Tipo */}
           <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value as FiltroTipo)}
+            value={filtros.tipo}
+            onChange={(e) => actualizarFiltro('tipo', e.target.value)}
             className="h-9 px-3 rounded-lg bg-card border border-border text-xs font-medium focus:outline-none appearance-none cursor-pointer"
           >
             <option value="todos">Todos los tipos</option>
@@ -304,23 +349,51 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
             <option value="local">Retiro en local</option>
           </select>
 
-          <button onClick={limpiarFiltros} className="text-xs font-bold text-primary hover:underline px-2">Limpiar filtros</button>
+          {/* Ordenar */}
+          <select
+            value={filtros.orden}
+            onChange={(e) => actualizarFiltro('orden', e.target.value)}
+            className="h-9 px-3 rounded-lg bg-card border border-border text-xs font-medium focus:outline-none appearance-none cursor-pointer"
+          >
+            <option value="reciente">Más reciente</option>
+            <option value="antiguo">Más antiguo</option>
+            <option value="mayor">Mayor total</option>
+            <option value="menor">Menor total</option>
+          </select>
+
+          {hayFiltros && (
+            <button onClick={limpiarFiltros} className="text-xs font-bold text-primary hover:underline px-2">
+              Limpiar filtros
+            </button>
+          )}
         </div>
 
-        {/* Búsqueda */}
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
-          <input
-            type="text"
-            placeholder="Buscar pedidos..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 rounded-lg bg-card border border-border text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
+        <div className="flex items-center gap-2">
+          {/* Exportar CSV */}
+          <button
+            onClick={exportarCSV}
+            disabled={exportando}
+            className="h-9 px-3 rounded-lg border border-border bg-card text-xs font-medium flex items-center gap-1.5 hover:bg-background-subtle transition-all disabled:opacity-50"
+          >
+            {exportando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Exportar CSV
+          </button>
+
+          {/* Búsqueda */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
+            <input
+              type="text"
+              placeholder="Buscar pedidos..."
+              value={inputBusqueda}
+              onChange={onCambioBusqueda}
+              className="w-full h-9 pl-9 pr-4 rounded-lg bg-card border border-border text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
         </div>
       </div>
 
-      {/* ══ TABLA DINÁMICA (Desktop) ══ */}
+      {/* ══ TABLA ══ */}
       <div className="bg-card rounded-xl border border-card-border overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
@@ -329,7 +402,7 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
                 <th className="px-4 py-3 w-10">
                   <input
                     type="checkbox"
-                    checked={seleccionados.length === filtrados.length && filtrados.length > 0}
+                    checked={seleccionados.length === pedidos.length && pedidos.length > 0}
                     onChange={seleccionarTodos}
                     className="rounded border-border text-primary focus:ring-primary/20"
                   />
@@ -342,7 +415,7 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtrados.length === 0 ? (
+              {pedidos.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-20 text-center text-foreground-muted">
                     <div className="flex flex-col items-center gap-2">
@@ -352,7 +425,7 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
                   </td>
                 </tr>
               ) : (
-                filtrados.map(pedido => {
+                pedidos.map(pedido => {
                   const est = ESTADOS[pedido.estado] || ESTADOS.procesando
                   const fac = facturasEmitidas[pedido.id]
                   return (
@@ -370,9 +443,9 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
-                          <Link href={`/admin/dashboard/pedidos/${pedido.id}`} className="text-sm font-bold text-primary hover:underline">
+                          <a href={`/admin/dashboard/pedidos/${pedido.id}`} className="text-sm font-bold text-primary hover:underline">
                             #{pedido.numero_orden.split('-')[1] || pedido.numero_orden} {pedido.nombres}
-                          </Link>
+                          </a>
                           <div className="flex items-center gap-1.5 mt-1">
                             {pedido.tipo === 'delivery' ? <Truck className="w-3 h-3 text-orange-500" /> : <Store className="w-3 h-3 text-emerald-500" />}
                             <span className="text-[10px] font-medium text-foreground-muted">{pedido.tipo === 'delivery' ? 'Envío' : 'Local'}</span>
@@ -445,7 +518,6 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
                              <Printer className="w-3.5 h-3.5" />
                            </button>
 
-                           {/* Botón Factura SRI si está completado */}
                            {pedido.estado === 'completado' && !fac && (
                              <button
                                onClick={() => emitirFactura(pedido.id)}
@@ -465,11 +537,11 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
                               </a>
                            )}
 
-                           <Link href={`/admin/dashboard/pedidos/${pedido.id}`}
+                           <a href={`/admin/dashboard/pedidos/${pedido.id}`}
                              className="w-8 h-8 rounded-lg bg-background border border-border flex items-center justify-center text-foreground-muted hover:text-primary hover:border-primary/40 transition-all shadow-sm"
                            >
                              <Eye className="w-3.5 h-3.5" />
-                           </Link>
+                           </a>
                         </div>
                       </td>
                     </tr>
@@ -481,20 +553,12 @@ export function TablaPedidos({ pedidos: pedidosInic, configTicket }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
-        <p className="text-[11px] font-medium text-foreground-muted">
-          Mostrando {filtrados.length} de {pedidos.length} pedidos
-        </p>
-        <div className="flex items-center gap-2">
-          <button disabled className="h-8 px-3 rounded-lg border border-border text-[11px] font-bold opacity-30 cursor-not-allowed transition-all">Anterior</button>
-          <button disabled className="h-8 px-3 rounded-lg border border-border text-[11px] font-bold opacity-30 cursor-not-allowed transition-all">Siguiente</button>
-        </div>
-      </div>
+      <PaginacionAdmin
+        total={total}
+        porPagina={porPagina}
+        pagina={pagina}
+        onPaginar={irAPagina}
+      />
     </div>
   )
-}
-
-// ── Componente Link Dummy si no se importa ───────────────────────
-function Link({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) {
-  return <a href={href} className={className}>{children}</a>
 }
