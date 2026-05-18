@@ -2338,4 +2338,27 @@ alter table configuracion_tienda
 
 alter table pedidos
   add column if not exists payphone_payment_id text;
+
+-- ============================================================
+-- MIGRACIÓN _060: Meta Pixel + Google Analytics 4
+-- ============================================================
+
+alter table configuracion_tienda
+  add column if not exists meta_pixel_id        text,
+  add column if not exists google_analytics_id  text;
+
+-- ============================================================
+-- MIGRACIÓN _061: Función obtener_tamano_db (monitor de BD)
+-- ============================================================
+
+create or replace function public.obtener_tamano_db()
+returns bigint
+language sql
+security definer
+set search_path = public
+as $$
+  select pg_database_size(current_database())::bigint;
 $$;
+
+revoke all   on function public.obtener_tamano_db() from public, anon, authenticated;
+grant execute on function public.obtener_tamano_db() to service_role;
