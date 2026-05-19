@@ -2362,3 +2362,271 @@ $$;
 
 revoke all   on function public.obtener_tamano_db() from public, anon, authenticated;
 grant execute on function public.obtener_tamano_db() to service_role;
+
+-- ============================================================
+-- MIGRACIÓN _062: Precio de costo y módulo de Utilidades
+-- ============================================================
+
+alter table productos
+  add column if not exists precio_costo decimal(10,2) default null;
+
+create or replace function calcular_utilidades(p_desde date, p_hasta date)
+returns table (
+  producto_id    uuid,
+  nombre         text,
+  precio_costo   decimal,
+  total_unidades bigint,
+  total_ingresos decimal,
+  total_costo    decimal,
+  utilidad_total decimal,
+  precio_min     decimal,
+  precio_max     decimal
+)
+language plpgsql security definer set search_path = public
+as $$
+begin
+  return query
+  select
+    p.id,
+    p.nombre::text,
+    p.precio_costo,
+    sum((item->>'cantidad')::int)::bigint,
+    sum((item->>'subtotal')::decimal),
+    sum((item->>'cantidad')::int * p.precio_costo),
+    sum((item->>'subtotal')::decimal) - sum((item->>'cantidad')::int * p.precio_costo),
+    min((item->>'precio')::decimal),
+    max((item->>'precio')::decimal)
+  from pedidos ped
+  cross join lateral jsonb_array_elements(ped.items) as item
+  join productos p on p.id = (item->>'producto_id')::uuid
+  where ped.estado in ('procesando', 'completado')
+    and ped.creado_en::date between p_desde and p_hasta
+    and p.precio_costo is not null
+    and p.precio_costo > 0
+  group by p.id, p.nombre, p.precio_costo
+  order by (sum((item->>'subtotal')::decimal) - sum((item->>'cantidad')::int * p.precio_costo)) desc;
+end;
+$$;
+
+revoke all on function calcular_utilidades(date, date) from public;
+grant execute on function calcular_utilidades(date, date) to authenticated;
+
+create or replace function ventas_producto(p_producto_id uuid, p_desde date, p_hasta date)
+returns table (
+  pedido_id      uuid,
+  numero_orden   text,
+  cliente        text,
+  fecha          date,
+  precio_vendido decimal,
+  cantidad       int,
+  costo_unitario decimal,
+  utilidad       decimal
+)
+language plpgsql security definer set search_path = public
+as $$
+declare v_costo decimal;
+begin
+  select precio_costo into v_costo from productos where id = p_producto_id;
+  if v_costo is null then return; end if;
+
+  return query
+  select
+    ped.id,
+    ped.numero_orden::text,
+    ped.nombres::text,
+    ped.creado_en::date,
+    (item->>'precio')::decimal,
+    (item->>'cantidad')::int,
+    v_costo,
+    ((item->>'precio')::decimal - v_costo) * (item->>'cantidad')::int
+  from pedidos ped
+  cross join lateral jsonb_array_elements(ped.items) as item
+  where (item->>'producto_id')::uuid = p_producto_id
+    and ped.estado in ('procesando', 'completado')
+    and ped.creado_en::date between p_desde and p_hasta
+  order by ped.creado_en desc;
+end;
+$$;
+
+revoke all on function ventas_producto(uuid, date, date) from public;
+grant execute on function ventas_producto(uuid, date, date) to authenticated;
+
+-- ============================================================
+-- MIGRACIÓN _063: Cuentas por Cobrar (ventas a crédito en POS)
+-- ============================================================
+
+alter table configuracion_tienda
+  add column if not exists credito_activo          boolean      default false,
+  add column if not exists credito_interes_activo  boolean      default false,
+  add column if not exists credito_tasa_mensual    decimal(5,2) default 0,
+  add column if not exists credito_cuotas_max      integer      default 6;
+
+alter table pedidos
+  add column if not exists es_credito              boolean       default false,
+  add column if not exists credito_cuotas          integer,
+  add column if not exists credito_frecuencia      text,
+  add column if not exists credito_tasa            decimal(5,2),
+  add column if not exists credito_total           decimal(10,2),
+  add column if not exists credito_monto_cuota     decimal(10,2),
+  add column if not exists credito_saldo_pendiente decimal(10,2);
+
+create table if not exists cuotas_credito (
+  id                uuid          primary key default gen_random_uuid(),
+  pedido_id         uuid          not null references pedidos(id) on delete cascade,
+  numero_cuota      integer       not null,
+  monto             decimal(10,2) not null,
+  fecha_vencimiento date          not null,
+  fecha_pago        date,
+  estado            text          not null default 'pendiente',
+  creado_en         timestamptz   not null default now()
+);
+
+create index if not exists idx_cuotas_pedido on cuotas_credito(pedido_id);
+create index if not exists idx_cuotas_estado on cuotas_credito(estado);
+create index if not exists idx_cuotas_vence  on cuotas_credito(fecha_vencimiento);
+
+alter table cuotas_credito enable row level security;
+
+drop policy if exists "cuotas_auth_all"   on cuotas_credito;
+drop policy if exists "cuotas_anon_select" on cuotas_credito;
+create policy "cuotas_auth_all"    on cuotas_credito for all    to authenticated using (true) with check (true);
+create policy "cuotas_anon_select" on cuotas_credito for select to anon           using (true);
+
+create table if not exists abonos_credito (
+  id          uuid          primary key default gen_random_uuid(),
+  pedido_id   uuid          not null references pedidos(id) on delete cascade,
+  cuota_id    uuid          references cuotas_credito(id) on delete set null,
+  monto       decimal(10,2) not null,
+  fecha_pago  date,
+  metodo_pago text,
+  notas       text,
+  creado_en   timestamptz   not null default now()
+);
+
+create index if not exists idx_abonos_pedido on abonos_credito(pedido_id);
+
+alter table abonos_credito enable row level security;
+
+drop policy if exists "abonos_auth_all" on abonos_credito;
+create policy "abonos_auth_all" on abonos_credito for all to authenticated using (true) with check (true);
+
+create or replace function marcar_cuotas_vencidas()
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  update cuotas_credito
+  set estado = 'vencido'
+  where estado = 'pendiente'
+    and fecha_vencimiento < current_date;
+end;
+$$;
+
+grant execute on function marcar_cuotas_vencidas() to authenticated;
+
+-- ============================================================
+-- MIGRACIÓN _064: Validación de identificaciones tributarias
+-- Cédula (módulo 10), RUC natural/sociedad/pública (módulo 11)
+-- CHECK constraint en tabla clientes
+-- ============================================================
+
+create or replace function validar_cedula_ecuador(p_cedula text)
+returns boolean
+language plpgsql immutable strict
+as $$
+declare
+  coef    integer[] := array[2,1,2,1,2,1,2,1,2];
+  suma    integer   := 0;
+  prod    integer;
+  prov    integer;
+  tercero integer;
+  i       integer;
+begin
+  if p_cedula !~ '^\d{10}$' then return false; end if;
+  prov := cast(left(p_cedula, 2) as integer);
+  if prov < 1 or prov > 24 then return false; end if;
+  tercero := cast(substring(p_cedula, 3, 1) as integer);
+  if tercero > 5 then return false; end if;
+  for i in 1..9 loop
+    prod := cast(substring(p_cedula, i, 1) as integer) * coef[i];
+    if prod >= 10 then prod := prod - 9; end if;
+    suma := suma + prod;
+  end loop;
+  return cast(substring(p_cedula, 10, 1) as integer)
+       = case when suma % 10 = 0 then 0 else 10 - (suma % 10) end;
+end;
+$$;
+
+create or replace function validar_ruc_ecuador(p_ruc text)
+returns boolean
+language plpgsql immutable strict
+as $$
+declare
+  prov    integer;
+  tercero integer;
+  coef9   integer[] := array[4,3,2,7,6,5,4,3,2];
+  coef8   integer[] := array[3,2,7,6,5,4,3,2];
+  suma    integer   := 0;
+  residuo integer;
+  verif   integer;
+  i       integer;
+begin
+  if p_ruc !~ '^\d{13}$' then return false; end if;
+  prov := cast(left(p_ruc, 2) as integer);
+  if prov < 1 or prov > 24 then return false; end if;
+  tercero := cast(substring(p_ruc, 3, 1) as integer);
+
+  if tercero <= 5 then
+    return validar_cedula_ecuador(left(p_ruc, 10))
+       and cast(substring(p_ruc, 11, 3) as integer) >= 1;
+  end if;
+  if tercero = 9 then
+    for i in 1..9 loop
+      suma := suma + cast(substring(p_ruc, i, 1) as integer) * coef9[i];
+    end loop;
+    residuo := suma % 11;
+    verif   := case when residuo = 0 then 0 else 11 - residuo end;
+    return cast(substring(p_ruc, 10, 1) as integer) = verif
+       and cast(substring(p_ruc, 11, 3) as integer) >= 1;
+  end if;
+  if tercero = 6 then
+    for i in 1..8 loop
+      suma := suma + cast(substring(p_ruc, i, 1) as integer) * coef8[i];
+    end loop;
+    residuo := suma % 11;
+    verif   := case when residuo = 0 then 0 else 11 - residuo end;
+    return cast(substring(p_ruc, 9, 1) as integer) = verif
+       and cast(substring(p_ruc, 10, 4) as integer) >= 1;
+  end if;
+  return false;
+end;
+$$;
+
+create or replace function validar_identificacion_cliente(p_tipo text, p_identificacion text)
+returns boolean
+language plpgsql immutable strict
+as $$
+begin
+  case p_tipo
+    when 'consumidor_final' then return p_identificacion = '9999999999999';
+    when 'cedula'           then return validar_cedula_ecuador(p_identificacion);
+    when 'ruc'              then return validar_ruc_ecuador(p_identificacion);
+    when 'pasaporte'        then return p_identificacion ~ '^[A-Z0-9]{5,20}$';
+    else return false;
+  end case;
+end;
+$$;
+
+revoke all on function validar_cedula_ecuador(text)                 from public, anon;
+revoke all on function validar_ruc_ecuador(text)                    from public, anon;
+revoke all on function validar_identificacion_cliente(text, text)   from public, anon;
+grant  execute on function validar_cedula_ecuador(text)             to authenticated;
+grant  execute on function validar_ruc_ecuador(text)                to authenticated;
+grant  execute on function validar_identificacion_cliente(text,text) to authenticated;
+
+alter table clientes
+  drop constraint if exists clientes_identificacion_valida;
+
+alter table clientes
+  add constraint clientes_identificacion_valida
+  check (validar_identificacion_cliente(tipo_identificacion::text, identificacion));

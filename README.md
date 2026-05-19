@@ -16,13 +16,13 @@ En **SQL Editor** de Supabase ejecutar en este orden exacto:
 
 Abrir el archivo `supabase/schema.sql` → copiar todo el contenido → pegarlo en SQL Editor → **Run**.
 
-> Este archivo es el schema unificado y cubre **todas** las tablas, funciones, políticas RLS, triggers y módulos del sistema (incluyendo Facturación SRI, Email, Clientes, POS, Alquileres, Finanzas). No requiere ejecutar migraciones adicionales.
+> Este archivo es el schema unificado y cubre **todas** las tablas, funciones, políticas RLS, triggers y módulos del sistema hasta la migración `_064`. No requiere ejecutar migraciones adicionales.
 
 ### Paso 2 — Datos iniciales
 
 Ejecutar `supabase/seed/01_datos_iniciales.sql` — crea la fila base en `configuracion_tienda` con valores genéricos para que la tienda arranque sin errores.
 
-> **Nota para futuras migraciones:** si se crean nuevas migraciones en `supabase/migrations/` con número mayor al `_061`, deben ejecutarse manualmente después del schema **y** luego incorporarse al `schema.sql` para mantenerlo actualizado. El schema completo ya incluye hasta `_061` (funciones de monitoreo de almacenamiento).
+> **Nota para futuras migraciones:** si se crean nuevas migraciones en `supabase/migrations/` con número mayor al `_064`, deben ejecutarse manualmente después del schema **y** luego incorporarse al `schema.sql` para mantenerlo actualizado. El schema completo ya incluye hasta `_064` (validación de identificaciones tributarias).
 
 ## 3. Usuarios administradores
 
@@ -679,5 +679,123 @@ Desde `/admin/dashboard/perfil` → pestaña **Colores**:
 
 - **Tema base** — 5 opciones: Claro, Oscuro, Midnight, Cálido, Océano. Cambia fondos, cards y textos.
 - **Color de acento** — 28 paletas predefinidas para botones y elementos interactivos.
+
+---
+
+## Módulo Utilidades (`_062`)
+
+`/admin/dashboard/utilidades` — análisis de rentabilidad real por producto.
+
+### Configuración
+
+1. Ir a cada producto → campo **Precio de costo** (solo visible en admin, nunca en tienda)
+2. Una vez ingresado el costo, el módulo de utilidades calculará el margen real
+
+### Funcionalidades
+
+- **Tabla dinámica** con columnas ordenables: producto, unidades vendidas, ingresos totales, costo, utilidad neta, margen %
+- **Rango de fechas** configurable — por defecto el mes en curso
+- **Precio de venta** muestra rango min–max con badge "varía" si el producto fue negociado a distintos precios
+- **Filas en rojo** cuando la utilidad es negativa
+- **Fila de totales** al pie de la tabla
+- **Aviso** con lista de productos sin precio de costo configurado (con enlace directo a editarlos)
+- **Detalle por producto** (`/utilidades/[productoId]`) — lista cada venta individual con fecha, N° pedido, cliente, precio cobrado, cantidad, costo unitario y utilidad
+
+### SQL requerido (nuevo cliente)
+
+```sql
+-- Migración _062
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS precio_costo DECIMAL(10,2) DEFAULT NULL;
+-- (+ funciones calcular_utilidades y ventas_producto — incluidas en schema.sql)
+```
+
+**Migración:** `supabase/migrations/20260518000062_precio_costo_utilidades.sql`
+
+---
+
+## Módulo Cuentas por Cobrar (`_063`)
+
+Gestión de ventas a crédito realizadas desde el POS. No aplica a la tienda online.
+
+### Configuración inicial
+
+1. Ir a **Perfil → pestaña Crédito**
+2. Activar **"Crédito activo"**
+3. Definir el máximo de cuotas permitidas
+4. Opcionalmente activar interés mensual e ingresar la tasa
+
+### Flujo de una venta a crédito
+
+1. En el POS (`/admin/dashboard/venta-nueva`) aparece la sección **"Venta a crédito"** cuando hay productos en el carrito
+2. El admin activa el toggle, elige frecuencia (mensual / quincenal / semanal) y número de cuotas (mínimo 2)
+3. El sistema muestra el plan de pagos con fechas:
+   - **Cuota 1 → se cobra hoy** (entrada, marcada en verde)
+   - **Cuotas siguientes** → vencen según la frecuencia elegida
+4. El interés se calcula sobre el período diferido: `total × tasa × (n-1) períodos`
+5. Al registrar la venta: cuota 1 queda marcada como `pagado` automáticamente y el saldo pendiente ya la descuenta
+
+### Panel de Cuentas por Cobrar
+
+`/admin/dashboard/cuentas-cobrar`
+
+- **Tarjetas resumen**: total por cobrar, monto vencido, vencimientos en 7 días, número de cuentas activas
+- **Filtros**: Todos / Vencido / Por vencer / Al día
+- **Tabla** con estado visual por pedido (badge color según estado más grave de las cuotas)
+
+**Detalle por cuenta** (`/cuentas-cobrar/[pedidoId]`):
+
+- Plan de cuotas completo con estado individual (pagado / pendiente / vencido)
+- Barra de progreso de pago
+- Historial de abonos registrados
+- **Modal "Abonar"**: registra el pago en `abonos_credito`, marca la cuota como pagada si el monto la cubre y descuenta del saldo pendiente
+
+### Vista del cliente
+
+En `/pedido/[numero]` — si el pedido es a crédito, el cliente ve su plan de cuotas con estado visual (verde = pagado, rojo = vencido, gris = pendiente).
+
+### SQL requerido (nuevo cliente)
+
+```sql
+-- Migración _063 (incluida en schema.sql)
+-- Agrega columnas de crédito a configuracion_tienda y pedidos
+-- Crea tablas cuotas_credito y abonos_credito con RLS
+-- Crea función marcar_cuotas_vencidas()
+```
+
+**Migración:** `supabase/migrations/20260518000063_cuentas_por_cobrar.sql`
+
+---
+
+## Validación de identificaciones tributarias (`_064`)
+
+El sistema valida matemáticamente las cédulas y RUC ecuatorianos antes de guardarlos, tanto en el formulario frontend como a nivel de base de datos.
+
+### Algoritmos implementados
+
+| Tipo | Algoritmo | Verificación |
+|------|-----------|-------------|
+| Cédula | Módulo 10 | Dígito verificador posición 10 |
+| RUC persona natural | Módulo 10 (primeros 10 dígitos = cédula) | Sufijo ≥ 001 |
+| RUC persona jurídica | Módulo 11 (9 coeficientes) | Dígito verificador posición 10 |
+| RUC entidad pública | Módulo 11 (8 coeficientes) | Dígito verificador posición 9 |
+| Pasaporte | Regex `^[A-Z0-9]{5,20}$` | Formato alfanumérico |
+
+### Dónde se aplica
+
+- **Frontend**: `src/lib/sri/validar-identificacion.ts` — validación en tiempo real en el formulario de clientes (panel admin y POS). Muestra feedback inmediato con color de borde (verde = válido, naranja = inválido).
+- **Base de datos**: CHECK constraint `clientes_identificacion_valida` en la tabla `clientes` — impide insertar o actualizar un cliente con identificación inválida aunque se acceda directamente a la BD.
+
+### SQL requerido (nuevo cliente)
+
+```sql
+-- Migración _064 (incluida en schema.sql)
+-- Crea funciones: validar_cedula_ecuador(), validar_ruc_ecuador(),
+--                 validar_identificacion_cliente()
+-- Agrega CHECK constraint a tabla clientes
+```
+
+**Migración:** `supabase/migrations/20260519000064_validacion_identificacion.sql`
+
+> **Nota:** si el cliente ya tiene registros en la tabla `clientes` con identificaciones inválidas (p.ej. datos de prueba), el CHECK constraint fallará al ejecutar la migración. En ese caso, primero limpiar o corregir esos registros, luego ejecutar `_064`.
 
 Ambos ajustes son independientes y se aplican en tiempo real sin redeploy. El color de acento también se aplica al menú superior del panel admin.
