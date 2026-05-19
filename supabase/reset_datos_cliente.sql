@@ -28,7 +28,6 @@ SELECT _borrar_si_existe('citas');
 SELECT _borrar_si_existe('pedidos');
 SELECT _borrar_si_existe('clientes');
 SELECT _borrar_si_existe('solicitudes_evento');
-SELECT _borrar_si_existe('leads');
 SELECT _borrar_si_existe('likes_producto');
 SELECT _borrar_si_existe('resenas_producto');
 SELECT _borrar_si_existe('mensajes_admin');

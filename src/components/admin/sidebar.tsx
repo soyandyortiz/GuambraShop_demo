@@ -139,7 +139,7 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
             'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors',
             esActivo('/admin/dashboard/venta-nueva')
               ? 'bg-emerald-600 text-white shadow-sm'
-              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60'
+              : 'text-emerald-600 hover:text-emerald-700 hover:bg-background-subtle'
           )}
         >
           <Receipt className="w-4 h-4 flex-shrink-0" />
