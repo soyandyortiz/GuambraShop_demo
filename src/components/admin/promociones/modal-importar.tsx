@@ -49,7 +49,7 @@ async function parsearXLSX(buffer: ArrayBuffer): Promise<Contacto[]> {
   const XLSX = await import('xlsx')
   const wb = XLSX.read(buffer, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { header: 1 }) as unknown[][]
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
 
   if (rows.length === 0) return []
 
