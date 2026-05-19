@@ -8,7 +8,7 @@ export async function StorageWidgetSidebar() {
   const colorBarra =
     uso.nivel === 'critico'    ? 'bg-red-500' :
     uso.nivel === 'advertencia'? 'bg-amber-500' :
-    'bg-emerald-500'
+    'bg-primary'
 
   const colorTexto =
     uso.nivel === 'critico'    ? 'text-red-600' :

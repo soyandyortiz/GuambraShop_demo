@@ -46,7 +46,7 @@ export async function EmailWidgetSidebar() {
   const colorBarra =
     pctDia >= 90 ? 'bg-red-500' :
     pctDia >= 75 ? 'bg-amber-500' :
-    'bg-emerald-500'
+    'bg-primary'
 
   const colorTexto =
     pctDia >= 90 ? 'text-red-600' :
@@ -87,7 +87,7 @@ export async function EmailWidgetSidebar() {
           </div>
           <div className="h-1 rounded-full bg-background-subtle overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${pctMes >= 90 ? 'bg-red-500' : pctMes >= 75 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+              className={`h-full rounded-full transition-all ${pctMes >= 90 ? 'bg-red-500' : pctMes >= 75 ? 'bg-amber-500' : 'bg-primary'}`}
               style={{ width: `${pctMes}%` }}
             />
           </div>

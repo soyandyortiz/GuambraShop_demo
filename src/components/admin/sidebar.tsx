@@ -53,30 +53,31 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
     {
       titulo: 'Ventas',
       items: [
-        { href: '/admin/dashboard/venta-nueva', icono: <Receipt className="w-4 h-4" />,      etiqueta: 'Nueva Venta',  badge: null },
-        { href: '/admin/dashboard/pedidos',     icono: <ClipboardList className="w-4 h-4" />, etiqueta: 'Pedidos',      badge: 'pedidos' },
-        { href: '/admin/dashboard/proformas',   icono: <ScrollText className="w-4 h-4" />,    etiqueta: 'Proformas',    badge: null },
-        { href: '/admin/dashboard/clientes',    icono: <Users className="w-4 h-4" />,         etiqueta: 'Clientes',     badge: null },
+        { href: '/admin/dashboard/pedidos',     icono: <ClipboardList className="w-4 h-4" />, etiqueta: 'Pedidos',   badge: 'pedidos' },
+        { href: '/admin/dashboard/proformas',   icono: <ScrollText className="w-4 h-4" />,    etiqueta: 'Proformas', badge: null },
+        { href: '/admin/dashboard/clientes',    icono: <Users className="w-4 h-4" />,         etiqueta: 'Clientes',  badge: null },
       ],
     },
     {
       titulo: 'Finanzas',
       items: [
-        { href: '/admin/dashboard/ingresos',     icono: <TrendingUp className="w-4 h-4" />,    etiqueta: 'Ingresos',       badge: null },
-        { href: '/admin/dashboard/utilidades',       icono: <BarChart3 className="w-4 h-4" />,  etiqueta: 'Utilidades',         badge: null },
-        { href: '/admin/dashboard/cuentas-cobrar', icono: <Landmark className="w-4 h-4" />,   etiqueta: 'Cuentas por Cobrar', badge: null },
-        { href: '/admin/dashboard/cierres-caja',   icono: <Calculator className="w-4 h-4" />, etiqueta: 'Cierre de Caja',    badge: null },
-        { href: '/admin/dashboard/egresos',      icono: <TrendingDown className="w-4 h-4" />, etiqueta: 'Egresos',        badge: null },
-        { href: '/admin/dashboard/proveedores',  icono: <Truck className="w-4 h-4" />,        etiqueta: 'Proveedores',    badge: null },
+        { href: '/admin/dashboard/ingresos',       icono: <TrendingUp className="w-4 h-4" />,  etiqueta: 'Ingresos',           badge: null },
+        { href: '/admin/dashboard/egresos',        icono: <TrendingDown className="w-4 h-4" />, etiqueta: 'Egresos',           badge: null },
+        { href: '/admin/dashboard/utilidades',     icono: <BarChart3 className="w-4 h-4" />,   etiqueta: 'Utilidades',         badge: null },
+        { href: '/admin/dashboard/cuentas-cobrar', icono: <Landmark className="w-4 h-4" />,    etiqueta: 'Cuentas por Cobrar', badge: null },
+        { href: '/admin/dashboard/cierres-caja',   icono: <Calculator className="w-4 h-4" />,  etiqueta: 'Cierre de Caja',     badge: null },
+        { href: '/admin/dashboard/facturacion',    icono: <FileText className="w-4 h-4" />,    etiqueta: 'Facturación',        badge: null },
       ],
     },
     {
       titulo: 'Catálogo',
       items: [
-        { href: '/admin/dashboard/productos',   icono: <Package className="w-4 h-4" />,   etiqueta: 'Productos',   badge: null },
-        { href: '/admin/dashboard/categorias',  icono: <Tag className="w-4 h-4" />,        etiqueta: 'Categorías',  badge: null },
-        { href: '/admin/dashboard/cupones',     icono: <Ticket className="w-4 h-4" />,     etiqueta: 'Cupones',     badge: null },
-        { href: '/admin/dashboard/promociones', icono: <Megaphone className="w-4 h-4" />,  etiqueta: 'Promociones', badge: null },
+        { href: '/admin/dashboard/productos',   icono: <Package className="w-4 h-4" />,  etiqueta: 'Productos',   badge: null },
+        { href: '/admin/dashboard/categorias',  icono: <Tag className="w-4 h-4" />,       etiqueta: 'Categorías',  badge: null },
+        { href: '/admin/dashboard/cupones',     icono: <Ticket className="w-4 h-4" />,    etiqueta: 'Cupones',     badge: null },
+        { href: '/admin/dashboard/promociones', icono: <Megaphone className="w-4 h-4" />, etiqueta: 'Promociones', badge: null },
+        { href: '/admin/dashboard/envios',      icono: <Truck className="w-4 h-4" />,     etiqueta: 'Envíos',      badge: null },
+        { href: '/admin/dashboard/proveedores', icono: <Truck className="w-4 h-4" />,     etiqueta: 'Proveedores', badge: null },
       ],
     },
     {
@@ -85,22 +86,20 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
         { href: '/admin/dashboard/calendario',  icono: <CalendarDays className="w-4 h-4" />, etiqueta: 'Calendario', badge: 'citas' },
         { href: '/admin/dashboard/solicitudes', icono: <PartyPopper className="w-4 h-4" />,  etiqueta: 'Eventos',    badge: 'solicitudes' },
         { href: '/admin/dashboard/alquileres',  icono: <KeyRound className="w-4 h-4" />,     etiqueta: 'Alquileres', badge: 'alquileres' },
-        { href: '/admin/dashboard/envios',      icono: <Truck className="w-4 h-4" />,        etiqueta: 'Envíos',     badge: null },
       ],
     },
     {
-      titulo: 'Administración',
+      titulo: 'Configuración',
       items: [
-        { href: '/admin/dashboard/facturacion', icono: <FileText className="w-4 h-4" />, etiqueta: 'Facturación', badge: null },
-        { href: '/admin/dashboard/resenas',     icono: <Star className="w-4 h-4" />,     etiqueta: 'Reseñas',     badge: null },
+        { href: '/admin/dashboard/resenas',        icono: <Star className="w-4 h-4" />,     etiqueta: 'Reseñas',     badge: null },
         ...(esSuperadmin ? [
-          { href: '/admin/dashboard/mensajes',      icono: <MessageSquare className="w-4 h-4" />, etiqueta: 'Mensajes',  badge: null },
-          { href: '/admin/dashboard/email',         icono: <Mail className="w-4 h-4" />,          etiqueta: 'Email',     badge: null },
-          { href: '/admin/dashboard/impresion',     icono: <Printer className="w-4 h-4" />,       etiqueta: 'Impresión', badge: null },
-          { href: '/admin/dashboard/perfil?tab=pagos', icono: <KeyRound className="w-4 h-4" />,   etiqueta: 'Pagos / PayPal', badge: null },
+          { href: '/admin/dashboard/mensajes',         icono: <MessageSquare className="w-4 h-4" />, etiqueta: 'Mensajes',      badge: null },
+          { href: '/admin/dashboard/email',            icono: <Mail className="w-4 h-4" />,          etiqueta: 'Email',         badge: null },
+          { href: '/admin/dashboard/impresion',        icono: <Printer className="w-4 h-4" />,       etiqueta: 'Impresión',     badge: null },
+          { href: '/admin/dashboard/perfil?tab=pagos', icono: <KeyRound className="w-4 h-4" />,      etiqueta: 'Pagos / PayPal', badge: null },
         ] : []),
         { href: '/admin/dashboard/almacenamiento', icono: <HardDrive className="w-4 h-4" />, etiqueta: 'Almacenamiento', badge: null },
-        { href: '/admin/dashboard/perfil',      icono: <Settings className="w-4 h-4" />,  etiqueta: 'Configuración', badge: null },
+        { href: '/admin/dashboard/perfil',         icono: <Settings className="w-4 h-4" />,  etiqueta: 'Configuración',  badge: null },
       ],
     },
   ]
@@ -119,8 +118,8 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
   return (
     <aside className="hidden lg:flex flex-col w-60 bg-card border-r border-border fixed left-0 top-11 bottom-0 z-40 overflow-y-auto">
 
-      {/* Inicio */}
-      <div className="px-2 pt-2">
+      {/* Dashboard + Nueva Venta */}
+      <div className="px-2 pt-2 flex flex-col gap-1">
         <Link
           href="/admin/dashboard"
           className={cn(
@@ -131,7 +130,20 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
           )}
         >
           <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-          Inicio
+          Dashboard
+        </Link>
+
+        <Link
+          href="/admin/dashboard/venta-nueva"
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors',
+            esActivo('/admin/dashboard/venta-nueva')
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60'
+          )}
+        >
+          <Receipt className="w-4 h-4 flex-shrink-0" />
+          Nueva Venta
         </Link>
       </div>
 
