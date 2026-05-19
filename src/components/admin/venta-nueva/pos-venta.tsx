@@ -172,7 +172,7 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
   // ─── Crédito ──────────────────────────────────────────────
 
   const [esCredito, setEsCredito]                   = useState(false)
-  const [creditoCuotas, setCreditoCuotas]           = useState(3)
+  const [creditoCuotas, setCreditoCuotas]           = useState(2)
   const [creditoFrecuencia, setCreditoFrecuencia]   = useState<'mensual' | 'quincenal' | 'semanal'>('mensual')
 
   // ─── Totales ──────────────────────────────────────────────
@@ -190,9 +190,11 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
   // ─── Cálculos de crédito ──────────────────────────────────
 
   const DIAS_FRECUENCIA: Record<string, number> = { mensual: 30, quincenal: 15, semanal: 7 }
-  const mesesCredito      = esCredito ? (creditoCuotas * (DIAS_FRECUENCIA[creditoFrecuencia] ?? 30)) / 30 : 0
-  const interesCredito    = esCredito && creditoInteresActivo && creditoTasaMensual > 0
-    ? +(total * (creditoTasaMensual / 100) * mesesCredito).toFixed(2)
+  // El interés se calcula solo sobre el período diferido: cuota 1 se paga hoy,
+  // así que el crédito real va desde hoy hasta la última cuota (n-1 períodos).
+  const mesesDiferidos    = esCredito ? ((creditoCuotas - 1) * (DIAS_FRECUENCIA[creditoFrecuencia] ?? 30)) / 30 : 0
+  const interesCredito    = esCredito && creditoInteresActivo && creditoTasaMensual > 0 && mesesDiferidos > 0
+    ? +(total * (creditoTasaMensual / 100) * mesesDiferidos).toFixed(2)
     : 0
   const totalConInteres   = esCredito ? +(total + interesCredito).toFixed(2) : total
   const montoCuotaCredito = esCredito && creditoCuotas > 0
@@ -200,12 +202,13 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     : 0
 
   function generarFechasCuotas(hoyStr: string): string[] {
+    // Cuota 1 = hoy (se cobra al momento); cuotas 2..n = intervalos desde hoy
     return Array.from({ length: creditoCuotas }, (_, i) => {
+      if (i === 0) return hoyStr
       const d = new Date(hoyStr + 'T12:00:00')
-      const n = i + 1
-      if (creditoFrecuencia === 'mensual')       d.setMonth(d.getMonth() + n)
-      else if (creditoFrecuencia === 'quincenal') d.setDate(d.getDate() + n * 15)
-      else                                        d.setDate(d.getDate() + n * 7)
+      if (creditoFrecuencia === 'mensual')        d.setMonth(d.getMonth() + i)
+      else if (creditoFrecuencia === 'quincenal') d.setDate(d.getDate() + i * 15)
+      else                                        d.setDate(d.getDate() + i * 7)
       return d.toISOString().split('T')[0]
     })
   }
@@ -499,7 +502,7 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     setDescValor('')
     setDescTipo('pct')
     setEsCredito(false)
-    setCreditoCuotas(3)
+    setCreditoCuotas(2)
     setCreditoFrecuencia('mensual')
     setVentaCreada(null)
     setEstadoFactura('idle')
@@ -1055,8 +1058,8 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
                         onChange={e => setCreditoCuotas(Number(e.target.value))}
                         className="h-9 px-2 rounded-xl border border-input-border bg-input-bg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                       >
-                        {Array.from({ length: creditoCuotasMax }, (_, i) => i + 1).map(n => (
-                          <option key={n} value={n}>{n} cuota{n !== 1 ? 's' : ''}</option>
+                        {Array.from({ length: Math.max(0, creditoCuotasMax - 1) }, (_, i) => i + 2).map(n => (
+                          <option key={n} value={n}>{n} cuotas</option>
                         ))}
                       </select>
                     </div>
@@ -1105,7 +1108,7 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
                     </div>
                     {interesCredito > 0 && (
                       <div className="flex justify-between text-amber-600">
-                        <span>Interés ({creditoTasaMensual}% × {mesesCredito.toFixed(1)} meses)</span>
+                        <span>Interés ({creditoTasaMensual}% × {mesesDiferidos.toFixed(1)} meses)</span>
                         <span>+{formatearPrecio(interesCredito, simboloMoneda)}</span>
                       </div>
                     )}
