@@ -1,7 +1,8 @@
 import { crearClienteServidor } from '@/lib/supabase/servidor'
 import {
   CheckCircle2, Clock, RotateCcw, Send, Package,
-  MapPin, Phone, Truck, Store, XCircle, MessageCircle, ArrowLeft, Calendar, Search
+  MapPin, Phone, Truck, Store, XCircle, MessageCircle, ArrowLeft, Calendar, Search,
+  Landmark, AlertTriangle
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatearPrecio } from '@/lib/utils'
@@ -37,7 +38,7 @@ export default async function PáginaSeguimientoPedido({
   const [{ data: pedido }, { data: config }] = await Promise.all([
     supabase
       .from('pedidos')
-      .select('numero_orden, tipo, nombres, whatsapp, ciudad, provincia, direccion, detalles_direccion, items, simbolo_moneda, subtotal, descuento_cupon, cupon_codigo, costo_envio, total, estado, creado_en')
+      .select('numero_orden, tipo, nombres, whatsapp, ciudad, provincia, direccion, detalles_direccion, items, simbolo_moneda, subtotal, descuento_cupon, cupon_codigo, costo_envio, total, estado, creado_en, es_credito, credito_cuotas, credito_frecuencia, credito_tasa, credito_total, credito_monto_cuota, credito_saldo_pendiente, cuotas_credito ( numero_cuota, monto, fecha_vencimiento, fecha_pago, estado )')
       .eq('numero_orden', numero.toUpperCase())
       .maybeSingle(),
     supabase
@@ -274,6 +275,75 @@ export default async function PáginaSeguimientoPedido({
           <span className="text-primary">{formatearPrecio(pedido.total, pedido.simbolo_moneda)}</span>
         </div>
       </div>
+
+      {/* Plan de cuotas (solo crédito) */}
+      {(pedido as any).es_credito && (
+        <div className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-foreground-muted uppercase tracking-wide flex items-center gap-1.5">
+              <Landmark className="w-3.5 h-3.5" />
+              Plan de pago a crédito
+            </p>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary capitalize">
+              {(pedido as any).credito_frecuencia}
+            </span>
+          </div>
+
+          {/* Resumen */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-background-subtle rounded-xl py-2 px-1">
+              <p className="text-[10px] text-foreground-muted">Total crédito</p>
+              <p className="text-xs font-bold text-foreground mt-0.5">{pedido.simbolo_moneda}{Number((pedido as any).credito_total).toFixed(2)}</p>
+            </div>
+            <div className="bg-background-subtle rounded-xl py-2 px-1">
+              <p className="text-[10px] text-foreground-muted">Cuota</p>
+              <p className="text-xs font-bold text-foreground mt-0.5">{pedido.simbolo_moneda}{Number((pedido as any).credito_monto_cuota).toFixed(2)}</p>
+            </div>
+            <div className="bg-background-subtle rounded-xl py-2 px-1">
+              <p className="text-[10px] text-foreground-muted">Saldo</p>
+              <p className="text-xs font-bold text-danger mt-0.5">{pedido.simbolo_moneda}{Number((pedido as any).credito_saldo_pendiente).toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Tabla de cuotas */}
+          <div className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
+            {((pedido as any).cuotas_credito ?? [])
+              .sort((a: any, b: any) => a.numero_cuota - b.numero_cuota)
+              .map((c: any) => {
+                const vencida  = c.estado === 'vencido'
+                const pagada   = c.estado === 'pagado'
+                return (
+                  <div key={c.numero_cuota} className={cn(
+                    'flex items-center justify-between px-3 py-2 text-xs',
+                    pagada ? 'bg-success/5' : vencida ? 'bg-danger/5' : ''
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0',
+                        pagada ? 'bg-success text-white' : vencida ? 'bg-danger text-white' : 'bg-border text-foreground-muted'
+                      )}>
+                        {pagada ? '✓' : c.numero_cuota}
+                      </span>
+                      <span className={cn('font-medium', pagada ? 'text-foreground-muted line-through' : 'text-foreground')}>
+                        {new Date(c.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold text-foreground">{pedido.simbolo_moneda}{Number(c.monto).toFixed(2)}</span>
+                      {vencida && <AlertTriangle className="w-3 h-3 text-danger" />}
+                      {pagada && <CheckCircle2 className="w-3 h-3 text-success" />}
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+          {(pedido as any).credito_tasa > 0 && (
+            <p className="text-[10px] text-foreground-muted text-center">
+              Incluye {(pedido as any).credito_tasa}% de interés mensual
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Botón WhatsApp */}
       {urlWAConsulta && (
