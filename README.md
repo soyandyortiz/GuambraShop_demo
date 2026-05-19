@@ -16,13 +16,13 @@ En **SQL Editor** de Supabase ejecutar en este orden exacto:
 
 Abrir el archivo `supabase/schema.sql` → copiar todo el contenido → pegarlo en SQL Editor → **Run**.
 
-> Este archivo es el schema unificado y cubre **todas** las tablas, funciones, políticas RLS, triggers y módulos del sistema hasta la migración `_064`. No requiere ejecutar migraciones adicionales.
+> Este archivo es el schema unificado y cubre **todas** las tablas, funciones, políticas RLS, triggers y módulos del sistema hasta la migración `_065`. No requiere ejecutar migraciones adicionales.
 
 ### Paso 2 — Datos iniciales
 
 Ejecutar `supabase/seed/01_datos_iniciales.sql` — crea la fila base en `configuracion_tienda` con valores genéricos para que la tienda arranque sin errores.
 
-> **Nota para futuras migraciones:** si se crean nuevas migraciones en `supabase/migrations/` con número mayor al `_064`, deben ejecutarse manualmente después del schema **y** luego incorporarse al `schema.sql` para mantenerlo actualizado. El schema completo ya incluye hasta `_064` (validación de identificaciones tributarias).
+> **Nota para futuras migraciones:** si se crean nuevas migraciones en `supabase/migrations/` con número mayor al `_065`, deben ejecutarse manualmente después del schema **y** luego incorporarse al `schema.sql` para mantenerlo actualizado. El schema completo ya incluye hasta `_065` (campañas de email marketing).
 
 ## 3. Usuarios administradores
 
@@ -799,3 +799,33 @@ El sistema valida matemáticamente las cédulas y RUC ecuatorianos antes de guar
 > **Nota:** si el cliente ya tiene registros en la tabla `clientes` con identificaciones inválidas (p.ej. datos de prueba), el CHECK constraint fallará al ejecutar la migración. En ese caso, primero limpiar o corregir esos registros, luego ejecutar `_064`.
 
 Ambos ajustes son independientes y se aplican en tiempo real sin redeploy. El color de acento también se aplica al menú superior del panel admin.
+
+---
+
+## Email Marketing (`_065`)
+
+Envío masivo de correos desde el panel admin, con límites automáticos para no saturar la cuenta de Gmail.
+
+### Cómo funciona
+
+1. Ir a **Promociones → Email Marketing**
+2. Crear una campaña: nombre interno, asunto y cuerpo del correo
+3. Importar los contactos desde un archivo Excel o CSV (columnas: Nombre, Email, WhatsApp)
+4. Activar la campaña — el sistema empieza a enviar automáticamente cada 2 horas (hasta 50 correos al día, 300 al mes)
+
+### Variables disponibles en el cuerpo del correo
+
+| Variable | Se reemplaza por |
+|----------|-----------------|
+| `{{nombre}}` | Nombre del contacto |
+| `{{tienda}}` | Nombre del negocio |
+
+### Límites de envío
+
+- **50 correos/día** y **300 correos/mes** — protegen la cuenta Gmail del cliente de ser bloqueada como spam
+- El panel muestra en tiempo real cuántos se han enviado hoy y en el mes
+
+### Lo que necesita el cliente
+
+- Tener configurado el módulo Email (Gmail o SMTP propio) en `/admin/dashboard/email`
+- El cron ya está activo en Vercel — no requiere configuración adicional
