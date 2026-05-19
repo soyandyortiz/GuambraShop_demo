@@ -132,49 +132,38 @@ export function FormularioLogin() {
     <>
       <div className="min-h-screen flex">
 
-        {/* ── PANEL IZQUIERDO — Chimborazo ── */}
+        {/* ── PANEL IZQUIERDO — Carrusel Chimborazo ── */}
         <div className="hidden lg:flex lg:flex-col lg:w-[60%] relative overflow-hidden bg-slate-900">
 
-          {/* Grid de 4 fotos */}
-          <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-            {FOTOS_CHIMBORAZO.map((foto, idx) => (
-              <div key={idx} className="relative overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={foto.src}
-                  alt={foto.autor}
-                  className={`absolute inset-0 w-full h-full object-cover transition-transform duration-700 ${
-                    imagenActiva === idx ? 'scale-105' : 'scale-100'
-                  }`}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
-                {/* Gradiente oscuro base */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/30" />
-                {/* Crédito del autor */}
-                <div className={`absolute bottom-0 left-0 right-0 px-3 py-2 transition-opacity duration-500 ${
-                  imagenActiva === idx ? 'opacity-100' : 'opacity-60'
-                }`}>
-                  <div className="flex items-center gap-1.5">
-                    <Camera className="w-3 h-3 text-white/70 flex-shrink-0" />
-                    <div>
-                      <p className="text-white text-xs font-semibold leading-tight">{foto.autor}</p>
-                      <p className="text-white/60 text-[10px]">{foto.descripcion}</p>
-                    </div>
-                  </div>
-                </div>
-                {/* Separador entre cuadrantes */}
-                <div className="absolute inset-0 border border-white/5 pointer-events-none" />
-              </div>
-            ))}
-          </div>
+          {/* Imágenes apiladas — solo la activa es visible */}
+          {FOTOS_CHIMBORAZO.map((foto, idx) => (
+            <div
+              key={idx}
+              className="absolute inset-0 transition-opacity duration-1000"
+              style={{ opacity: imagenActiva === idx ? 1 : 0 }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={foto.src}
+                alt={foto.autor}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{
+                  transform: imagenActiva === idx ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'transform 6s ease-out',
+                }}
+              />
+              {/* Gradiente en la parte inferior para legibilidad */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30" />
+            </div>
+          ))}
 
-          {/* Overlay general con gradiente de marca */}
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/40 via-transparent to-primary/20 pointer-events-none" />
+          {/* Overlay de marca */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-primary/10 pointer-events-none" />
 
           {/* Contenido superpuesto */}
           <div className="relative z-10 flex flex-col h-full p-8">
 
-            {/* Logo GuambraWeb en esquina superior */}
+            {/* Logo GuambraWeb */}
             <div className="flex items-center gap-2 self-start">
               <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
                 <span className="text-white font-black text-sm">G</span>
@@ -182,17 +171,42 @@ export function FormularioLogin() {
               <span className="text-white/80 text-sm font-semibold tracking-wide">GuambraWeb</span>
             </div>
 
-            {/* Indicadores de imagen activa */}
-            <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-2">
+            {/* Crédito del autor — animado con la imagen activa */}
+            <div className="mt-auto mb-6">
+              {FOTOS_CHIMBORAZO.map((foto, idx) => (
+                <div
+                  key={idx}
+                  className="absolute transition-all duration-700"
+                  style={{
+                    opacity: imagenActiva === idx ? 1 : 0,
+                    transform: imagenActiva === idx ? 'translateY(0)' : 'translateY(8px)',
+                    bottom: '160px',
+                    left: '32px',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Camera className="w-3.5 h-3.5 text-white/60" />
+                    <div>
+                      <p className="text-white font-semibold text-sm">{foto.autor}</p>
+                      <p className="text-white/60 text-xs">{foto.descripcion}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Indicadores (dots) */}
+            <div className="absolute bottom-36 left-1/2 -translate-x-1/2 flex gap-2 z-20">
               {FOTOS_CHIMBORAZO.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => setImagenActiva(idx)}
-                  className={`rounded-full transition-all duration-300 ${
-                    imagenActiva === idx
-                      ? 'w-6 h-2 bg-white'
-                      : 'w-2 h-2 bg-white/40 hover:bg-white/60'
-                  }`}
+                  className="rounded-full transition-all duration-300"
+                  style={{
+                    width: imagenActiva === idx ? '24px' : '8px',
+                    height: '8px',
+                    backgroundColor: imagenActiva === idx ? 'white' : 'rgba(255,255,255,0.35)',
+                  }}
                   aria-label={`Foto ${idx + 1}`}
                 />
               ))}
@@ -200,7 +214,7 @@ export function FormularioLogin() {
 
             {/* Barra de soporte técnico */}
             <div className="mt-auto">
-              <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 p-5">
+              <div className="rounded-2xl bg-black/50 backdrop-blur-md border border-white/10 p-5">
                 <p className="text-white/50 text-[10px] uppercase tracking-widest font-semibold mb-3">
                   Soporte técnico
                 </p>
