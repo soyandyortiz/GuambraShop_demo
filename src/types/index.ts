@@ -37,8 +37,38 @@ export interface ConfiguracionTienda {
   capacidad_citas_simultaneas: number
   seleccion_empleado: boolean
   pais: string
+  // Crédito / cuentas por cobrar
+  credito_activo?:         boolean
+  credito_interes_activo?: boolean
+  credito_tasa_mensual?:   number
+  credito_cuotas_max?:     number
   creado_en: string
   actualizado_en: string
+}
+
+export type FrecuenciaCredito = 'mensual' | 'quincenal' | 'semanal'
+export type EstadoCuota = 'pendiente' | 'pagado' | 'vencido'
+
+export interface CuotaCredito {
+  id: string
+  pedido_id: string
+  numero_cuota: number
+  monto: number
+  fecha_vencimiento: string
+  fecha_pago: string | null
+  estado: EstadoCuota
+  creado_en: string
+}
+
+export interface AbonoCredito {
+  id: string
+  pedido_id: string
+  cuota_id: string | null
+  monto: number
+  fecha_pago: string
+  metodo_pago: string | null
+  notas: string | null
+  creado_en: string
 }
 
 export interface EmpleadoCita {
@@ -327,6 +357,14 @@ export interface Pedido {
   comprobante_url: string | null
   comprobante_eliminar_en: string | null
   paypal_order_id: string | null
+  // Crédito
+  es_credito?:              boolean
+  credito_cuotas?:          number | null
+  credito_frecuencia?:      FrecuenciaCredito | null
+  credito_tasa?:            number | null
+  credito_total?:           number | null
+  credito_monto_cuota?:     number | null
+  credito_saldo_pendiente?: number | null
   creado_en: string
   actualizado_en: string
 }

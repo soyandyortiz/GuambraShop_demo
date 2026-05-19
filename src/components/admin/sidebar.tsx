@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, Tag, Ticket, Megaphone,
   Settings, MessageSquare, Star,
   ClipboardList, CalendarDays, Truck, PartyPopper, TrendingUp, TrendingDown,
-  Users, KeyRound, FileText, Mail, Receipt, Printer, Calculator, HardDrive, ScrollText, BarChart3
+  Users, KeyRound, FileText, Mail, Receipt, Printer, Calculator, HardDrive, ScrollText, BarChart3, Landmark
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usarConteosAdmin } from '@/hooks/usar-conteos-admin'
@@ -63,8 +63,9 @@ export function Sidebar({ rol, nombre: _nombre, fotoPerfil: _fotoPerfil, favicon
       titulo: 'Finanzas',
       items: [
         { href: '/admin/dashboard/ingresos',     icono: <TrendingUp className="w-4 h-4" />,    etiqueta: 'Ingresos',       badge: null },
-        { href: '/admin/dashboard/utilidades',   icono: <BarChart3 className="w-4 h-4" />,    etiqueta: 'Utilidades',     badge: null },
-        { href: '/admin/dashboard/cierres-caja', icono: <Calculator className="w-4 h-4" />,   etiqueta: 'Cierre de Caja', badge: null },
+        { href: '/admin/dashboard/utilidades',       icono: <BarChart3 className="w-4 h-4" />,  etiqueta: 'Utilidades',         badge: null },
+        { href: '/admin/dashboard/cuentas-cobrar', icono: <Landmark className="w-4 h-4" />,   etiqueta: 'Cuentas por Cobrar', badge: null },
+        { href: '/admin/dashboard/cierres-caja',   icono: <Calculator className="w-4 h-4" />, etiqueta: 'Cierre de Caja',    badge: null },
         { href: '/admin/dashboard/egresos',      icono: <TrendingDown className="w-4 h-4" />, etiqueta: 'Egresos',        badge: null },
         { href: '/admin/dashboard/proveedores',  icono: <Truck className="w-4 h-4" />,        etiqueta: 'Proveedores',    badge: null },
       ],

@@ -48,6 +48,10 @@ interface ConfigTienda {
   paypal_client_id?: string | null
   paypal_secret?: string | null
   paypal_modo?: string | null
+  credito_activo?: boolean
+  credito_interes_activo?: boolean
+  credito_tasa_mensual?: number | null
+  credito_cuotas_max?: number | null
 }
 
 interface EmpleadoCita {
@@ -164,6 +168,7 @@ const TABS = [
   { id: 'colores',     label: 'Colores',         icon: Palette    },
   { id: 'direcciones', label: 'Direcciones',     icon: MapPin     },
   { id: 'redes',       label: 'Redes',           icon: Share2     },
+  { id: 'credito',     label: 'Crédito',         icon: Landmark   },
   { id: 'micuenta',    label: 'Mi cuenta',       icon: User       },
 ]
 
@@ -222,6 +227,7 @@ export function FormularioPerfil({ config, direcciones: dirInic, redes: redesIni
         {tab === 'colores'     && <TabColores config={config} />}
         {tab === 'direcciones' && <TabDirecciones direccionesInic={dirInic} />}
         {tab === 'redes'       && <TabRedes redesInic={redesInic} />}
+        {tab === 'credito'     && <TabCredito config={config} />}
         {tab === 'micuenta'    && <TabMiCuenta perfil={perfil} rol={rol} />}
       </div>
     </div>
@@ -2055,6 +2061,148 @@ function TabMarketing({ configId, pixelInic, gaInic }: { configId: string; pixel
           Guardar
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Tab Crédito ──────────────────────────────────────────────
+function TabCredito({ config }: { config: ConfigTienda }) {
+  const [guardando, setGuardando]           = useState(false)
+  const [activo, setActivo]                 = useState(config.credito_activo ?? false)
+  const [interesActivo, setInteresActivo]   = useState(config.credito_interes_activo ?? false)
+  const [tasa, setTasa]                     = useState(String(config.credito_tasa_mensual ?? ''))
+  const [cuotasMax, setCuotasMax]           = useState(String(config.credito_cuotas_max ?? '6'))
+
+  async function guardar() {
+    setGuardando(true)
+    const supabase = crearClienteSupabase()
+    const { error } = await supabase.from('configuracion_tienda').update({
+      credito_activo:         activo,
+      credito_interes_activo: interesActivo,
+      credito_tasa_mensual:   interesActivo ? (parseFloat(tasa) || 0) : 0,
+      credito_cuotas_max:     parseInt(cuotasMax, 10) || 6,
+    }).eq('id', config.id)
+    setGuardando(false)
+    if (error) { toast.error('Error al guardar'); return }
+    toast.success('Configuración de crédito guardada')
+    setTimeout(() => window.location.reload(), 1200)
+  }
+
+  return (
+    <div className="flex flex-col gap-5 max-w-md">
+
+      <div className="flex flex-col gap-1">
+        <h2 className="text-sm font-bold text-foreground">Ventas a crédito (POS)</h2>
+        <p className="text-xs text-foreground-muted">
+          Permite registrar ventas en cuotas desde el Punto de Venta. No afecta la tienda online.
+        </p>
+      </div>
+
+      {/* Toggle principal */}
+      <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-background-subtle">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Habilitar crédito en POS</p>
+          <p className="text-xs text-foreground-muted mt-0.5">
+            Activa la opción de "Venta a crédito" al confirmar ventas manuales
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActivo(v => !v)}
+          className={cn(
+            'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+            activo ? 'bg-primary' : 'bg-border'
+          )}
+        >
+          <span className={cn(
+            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
+            activo && 'translate-x-5'
+          )} />
+        </button>
+      </div>
+
+      {activo && (
+        <>
+          {/* Máximo de cuotas */}
+          <Campo label="Máximo de cuotas permitidas">
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={cuotasMax}
+              onChange={e => setCuotasMax(e.target.value)}
+              className={inputCls}
+              placeholder="Ej: 6"
+            />
+            <p className="text-[11px] text-foreground-muted mt-1">
+              El vendedor podrá elegir hasta este número de cuotas al registrar una venta a crédito.
+            </p>
+          </Campo>
+
+          {/* Toggle interés */}
+          <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-background-subtle">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Cobrar interés en cuotas</p>
+              <p className="text-xs text-foreground-muted mt-0.5">
+                Si está desactivado, el cliente paga el valor exacto dividido en cuotas sin recargo
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInteresActivo(v => !v)}
+              className={cn(
+                'relative w-11 h-6 rounded-full transition-colors flex-shrink-0',
+                interesActivo ? 'bg-primary' : 'bg-border'
+              )}
+            >
+              <span className={cn(
+                'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
+                interesActivo && 'translate-x-5'
+              )} />
+            </button>
+          </div>
+
+          {/* Tasa de interés */}
+          {interesActivo && (
+            <Campo label="Tasa de interés mensual (%)">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={tasa}
+                  onChange={e => setTasa(e.target.value)}
+                  className={cn(inputCls, 'pr-8')}
+                  placeholder="Ej: 5.0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground-muted text-sm font-medium">%</span>
+              </div>
+              <p className="text-[11px] text-foreground-muted mt-1">
+                Se aplica sobre el total según los meses equivalentes al plan de cuotas elegido.
+              </p>
+              {tasa && parseFloat(tasa) > 0 && (
+                <div className="mt-2 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs text-foreground-muted">
+                  <p className="font-semibold text-foreground mb-1">Ejemplo de cálculo (interés simple)</p>
+                  <p>Compra: <strong>$100</strong> · 3 cuotas mensuales · {parseFloat(tasa)}% mensual</p>
+                  <p>Interés: $100 × {parseFloat(tasa)}% × 3 = <strong>${(100 * (parseFloat(tasa) / 100) * 3).toFixed(2)}</strong></p>
+                  <p>Total: <strong>${(100 + 100 * (parseFloat(tasa) / 100) * 3).toFixed(2)}</strong> · Cuota: <strong>${((100 + 100 * (parseFloat(tasa) / 100) * 3) / 3).toFixed(2)}/mes</strong></p>
+                </div>
+              )}
+            </Campo>
+          )}
+        </>
+      )}
+
+      <button
+        type="button"
+        onClick={guardar}
+        disabled={guardando}
+        className="flex items-center gap-2 w-fit px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover disabled:opacity-50 transition-colors"
+      >
+        {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        Guardar configuración
+      </button>
     </div>
   )
 }
