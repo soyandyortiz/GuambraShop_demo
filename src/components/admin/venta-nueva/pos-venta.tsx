@@ -756,8 +756,8 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
                       </div>
                     )}
 
-                    {/* Gradiente + nombre + precio */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-2.5 pt-8 pb-2.5">
+                    {/* Fondo sólido + nombre + precio */}
+                    <div className="absolute inset-x-0 bottom-0 bg-black/70 px-2.5 pt-2.5 pb-2.5">
                       <p className="text-white text-[11px] font-semibold leading-snug line-clamp-2">
                         {producto.nombre}
                       </p>
