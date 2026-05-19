@@ -200,6 +200,7 @@ export interface Producto {
   max_dias_alquiler?: number | null    // Solo alquiler: máximo de días
   garantia_descripcion?: string | null // Solo alquiler: texto de garantía (cédula, laptop, etc.)
   tarifa_iva?: number | null           // null = usar tarifa global de configuracion_facturacion
+  precio_costo?: number | null         // Solo admin: precio de adquisición para cálculo de utilidades
   creado_en: string
   actualizado_en: string
   // Relaciones (joins)

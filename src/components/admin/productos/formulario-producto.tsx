@@ -23,6 +23,7 @@ const esquema = z.object({
   descripcion:      z.string().optional(),
   precio:           z.string().min(1, 'El precio es obligatorio'),
   precio_descuento: z.string().optional(),
+  precio_costo:     z.string().optional(),
   categoria_id:     z.string().optional(),
   esta_activo:      z.boolean(),
   etiquetas:        z.string().optional(),
@@ -101,6 +102,7 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
       descripcion: producto?.descripcion ?? '',
       precio: producto?.precio?.toString() ?? '',
       precio_descuento: producto?.precio_descuento?.toString() ?? '',
+      precio_costo:     (producto as any)?.precio_costo?.toString() ?? '',
       categoria_id: producto?.categoria_id ?? '',
       esta_activo: producto?.esta_activo ?? true,
       etiquetas: producto?.etiquetas?.join(', ') ?? '',
@@ -165,6 +167,7 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
       descripcion: datos.descripcion ?? null,
       precio: parseFloat(datos.precio),
       precio_descuento: datos.precio_descuento ? parseFloat(datos.precio_descuento) : null,
+      precio_costo:     datos.precio_costo     ? parseFloat(datos.precio_costo)     : null,
       categoria_id: datos.categoria_id || null,
       esta_activo: datos.esta_activo,
       etiquetas: etiquetasArray,
@@ -460,6 +463,45 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
               {...register('precio_descuento')}
             />
           )}
+
+          {/* Precio de costo — solo admin, nunca visible en tienda */}
+          <div className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-2">
+            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">
+              Precio de costo / adquisición · Solo visible en el admin
+            </p>
+            <div className="grid grid-cols-2 gap-3 items-end">
+              <Input
+                etiqueta="Precio de costo"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                {...register('precio_costo')}
+              />
+              {(() => {
+                const costo = parseFloat(watch('precio_costo') || '0')
+                const venta = parseFloat(watch('precio') || '0')
+                if (costo <= 0 || venta <= 0) return null
+                const margen = ((venta - costo) / venta) * 100
+                const ganancia = venta - costo
+                return (
+                  <div className="pb-2">
+                    <p className="text-xs text-amber-800">
+                      Ganancia por unidad:{' '}
+                      <span className={cn('font-bold', ganancia < 0 ? 'text-red-600' : 'text-emerald-700')}>
+                        ${ganancia.toFixed(2)}
+                      </span>
+                    </p>
+                    <p className="text-xs text-amber-800">
+                      Margen:{' '}
+                      <span className={cn('font-bold', margen < 0 ? 'text-red-600' : margen < 15 ? 'text-amber-700' : 'text-emerald-700')}>
+                        {margen.toFixed(1)}%
+                      </span>
+                    </p>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
 
           {/* IVA por producto */}
           <div className="col-span-2">
