@@ -12,9 +12,10 @@ interface Props {
   email: string
   rol: Rol
   fotoPerfil?: string | null
+  nombreTienda?: string
 }
 
-export function TopbarAdmin({ nombre, email, rol, fotoPerfil }: Props) {
+export function TopbarAdmin({ nombre, email, rol, fotoPerfil, nombreTienda = 'Mi Tienda' }: Props) {
   const router = useRouter()
 
   async function cerrarSesion() {
@@ -32,8 +33,8 @@ export function TopbarAdmin({ nombre, email, rol, fotoPerfil }: Props) {
       {/* Marca — ocupa el mismo ancho que el sidebar */}
       <div className="w-60 flex-shrink-0 flex items-center px-4">
         <Link href="/admin/dashboard" className="flex items-center gap-2">
-          <span className="text-white font-bold text-sm tracking-tight">GuambraShop</span>
-          <span className="text-white/50 text-[10px] font-medium uppercase tracking-widest">Admin</span>
+          <span className="text-white font-bold text-sm tracking-tight">{nombreTienda}</span>
+          <span className="text-white/50 text-[10px] font-medium lowercase tracking-wide">by GuambraShop</span>
         </Link>
       </div>
 

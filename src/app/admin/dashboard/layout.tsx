@@ -20,7 +20,7 @@ export default async function LayoutDashboard({ children }: { children: React.Re
 
   const [{ data: perfil }, { data: config }, { data: mensajesSinLeer }] = await Promise.all([
     supabase.from('perfiles').select('nombre, rol').eq('id', user.id).single(),
-    supabase.from('configuracion_tienda').select('foto_perfil_url, favicon_url').single(),
+    supabase.from('configuracion_tienda').select('foto_perfil_url, favicon_url, nombre_tienda').single(),
     supabase.from('mensajes_admin').select('id, asunto, cuerpo, leido, creado_en')
       .eq('leido', false).order('creado_en'),
   ])
@@ -28,8 +28,9 @@ export default async function LayoutDashboard({ children }: { children: React.Re
   const nombre     = perfil?.nombre ?? 'Usuario'
   const email      = user.email ?? ''
   const rol        = (perfil?.rol ?? 'admin') as 'admin' | 'superadmin'
-  const fotoPerfil = config?.foto_perfil_url ?? null
-  const faviconUrl = config?.favicon_url ?? null
+  const fotoPerfil   = config?.foto_perfil_url ?? null
+  const faviconUrl   = config?.favicon_url ?? null
+  const nombreTienda = config?.nombre_tienda ?? 'Mi Tienda'
   const esDemo     = user.email === EMAIL_DEMO
 
   return (
@@ -39,7 +40,7 @@ export default async function LayoutDashboard({ children }: { children: React.Re
 
         {/* Sidebar + Topbar: ambos fixed, topbar ancho completo z-50, sidebar top-11 z-40 */}
         <Sidebar nombre={nombre} rol={rol} fotoPerfil={fotoPerfil} faviconUrl={faviconUrl} footer={<FooterSidebar />} />
-        <TopbarAdmin nombre={nombre} email={email} rol={rol} fotoPerfil={fotoPerfil} />
+        <TopbarAdmin nombre={nombre} email={email} rol={rol} fotoPerfil={fotoPerfil} nombreTienda={nombreTienda} />
 
         {/* Contenido: desplazado por sidebar (ml-60) y topbar (pt-11) en desktop */}
         <div className="flex flex-col flex-1 min-w-0 lg:ml-60 lg:pt-11">
