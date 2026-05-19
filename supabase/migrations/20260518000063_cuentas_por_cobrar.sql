@@ -36,10 +36,12 @@ CREATE INDEX IF NOT EXISTS idx_cuotas_vence   ON cuotas_credito(fecha_vencimient
 ALTER TABLE cuotas_credito ENABLE ROW LEVEL SECURITY;
 
 -- Admin: acceso total
+DROP POLICY IF EXISTS "cuotas_auth_all" ON cuotas_credito;
 CREATE POLICY "cuotas_auth_all" ON cuotas_credito
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- Público: solo lectura (para página /pedido/[numero])
+DROP POLICY IF EXISTS "cuotas_anon_select" ON cuotas_credito;
 CREATE POLICY "cuotas_anon_select" ON cuotas_credito
   FOR SELECT TO anon USING (true);
 
@@ -60,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_abonos_pedido ON abonos_credito(pedido_id);
 ALTER TABLE abonos_credito ENABLE ROW LEVEL SECURITY;
 
 -- Solo admin puede ver y registrar abonos
+DROP POLICY IF EXISTS "abonos_auth_all" ON abonos_credito;
 CREATE POLICY "abonos_auth_all" ON abonos_credito
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
