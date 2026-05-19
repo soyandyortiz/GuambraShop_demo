@@ -31,6 +31,9 @@ SELECT _borrar_si_existe('solicitudes_evento');
 SELECT _borrar_si_existe('likes_producto');
 SELECT _borrar_si_existe('resenas_producto');
 SELECT _borrar_si_existe('mensajes_admin');
+SELECT _borrar_si_existe('contactos_campana');
+SELECT _borrar_si_existe('campanas_email');
+SELECT _borrar_si_existe('email_envios_diarios');
 
 -- ------------------------------------------------------------
 -- REINICIAR SECUENCIAS DE NUMERACIÓN
