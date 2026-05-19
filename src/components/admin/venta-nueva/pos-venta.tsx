@@ -527,7 +527,7 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     }
 
     return (
-      <div className="rounded-2xl bg-card border border-card-border p-6 flex flex-col gap-4 max-w-sm mx-auto">
+      <div className="rounded-2xl bg-card border border-card-border p-6 flex flex-col gap-4 w-full max-w-sm mx-auto">
 
         {/* Cabecera de éxito */}
         <div className="flex flex-col items-center gap-2 text-center">
