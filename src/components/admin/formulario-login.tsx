@@ -258,32 +258,19 @@ export function FormularioLogin() {
 
             {/* Logo de la tienda */}
             <div className="flex flex-col items-center mb-8">
-              <div className={`mb-5 rounded-2xl shadow-xl overflow-hidden border-2 border-border/50 ${
-                logoMostrar ? 'w-24 h-24' : 'w-20 h-20 bg-primary/10'
-              } flex items-center justify-center`}>
-                {logoMostrar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logoMostrar}
-                    alt={nombreTienda || 'Logo'}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-primary font-black text-3xl select-none">
-                    {nombreTienda ? nombreTienda.charAt(0).toUpperCase() : '?'}
-                  </span>
-                )}
-              </div>
-
-              {nombreTienda && (
-                <h2 className="text-lg font-bold text-foreground mb-1 text-center leading-tight">
-                  {nombreTienda}
-                </h2>
+              {logoMostrar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoMostrar}
+                  alt={nombreTienda || 'Logo'}
+                  className="h-20 w-auto object-contain mb-5"
+                />
+              ) : (
+                <span className="text-primary font-black text-5xl select-none mb-5">
+                  {nombreTienda ? nombreTienda.charAt(0).toUpperCase() : '?'}
+                </span>
               )}
               <h1 className="text-2xl font-bold text-foreground">Bienvenido</h1>
-              <p className="text-sm text-foreground-muted mt-1 text-center">
-                Ingresa a tu panel de administración
-              </p>
             </div>
 
             {/* Formulario */}
