@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Mail, Plus, Play, Pause, Trash2, Upload,
   Users, CheckCircle2, XCircle, Clock, BarChart3,
-  ChevronDown, ChevronUp, AlertCircle, Loader2, Send, Eye
+  ChevronDown, ChevronUp, AlertCircle, Loader2, Send, Eye, Zap, StopCircle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -52,7 +52,9 @@ export function PanelEmailMarketing() {
   const [importando,   setImportando]   = useState<Campana | null>(null)
   const [expandida,    setExpandida]    = useState<string | null>(null)
   const [operando,     setOperando]     = useState<string | null>(null)
+  const [enviandoAhora, setEnviandoAhora] = useState<string | null>(null)
   const cargandoRef = useRef(false)
+  const cancelarRef = useRef(false)
 
   async function cargar() {
     if (cargandoRef.current) return
@@ -127,6 +129,67 @@ export function PanelEmailMarketing() {
     setOperando(null)
   }
 
+  async function enviarAhora(campana: Campana) {
+    if (campana.total_contactos === 0) {
+      toast.error('Importa contactos antes de enviar')
+      return
+    }
+    // Activar si no está activa
+    if (campana.estado !== 'activa') {
+      setOperando(campana.id)
+      const supabase = crearClienteSupabase()
+      await supabase.from('campanas_email').update({
+        estado: 'activa',
+        ...(!campana.iniciado_en ? { iniciado_en: new Date().toISOString() } : {}),
+      }).eq('id', campana.id)
+      setOperando(null)
+    }
+
+    setEnviandoAhora(campana.id)
+    cancelarRef.current = false
+    let totalEnviados = 0
+
+    while (!cancelarRef.current) {
+      try {
+        const res  = await fetch('/api/email/campana/procesar')
+        const data = await res.json()
+
+        if (data.skip === 'limite_diario') {
+          toast.warning('Límite diario de 50 emails alcanzado')
+          break
+        }
+        if (data.skip === 'limite_mensual') {
+          toast.warning('Límite mensual de 300 emails alcanzado')
+          break
+        }
+        if (data.skip === 'sin_contactos_pendientes' || data.skip === 'sin_campanas_activas') {
+          if (totalEnviados > 0) toast.success(`✓ ${totalEnviados} emails enviados`)
+          else toast.info('No hay contactos pendientes')
+          break
+        }
+        if (data.skip === 'email_no_configurado') {
+          toast.error('Configura el email en Ajustes → Email antes de enviar')
+          break
+        }
+
+        if ((data.enviados ?? 0) > 0) {
+          totalEnviados += data.enviados
+          await cargar()
+        }
+
+        // 4 segundos entre lotes para no activar filtros anti-spam de Gmail
+        await new Promise(r => setTimeout(r, 4000))
+      } catch {
+        toast.error('Error de conexión al enviar')
+        break
+      }
+    }
+
+    if (cancelarRef.current) toast.info(`Envío cancelado · ${totalEnviados} emails enviados`)
+    setEnviandoAhora(null)
+    await cargar()
+  }
+
   const pctDia = Math.min((enviadosHoy / LIMITE_DIARIO) * 100, 100)
   const pctMes = Math.min((enviadosMes / LIMITE_MENSUAL) * 100, 100)
 
@@ -188,8 +251,9 @@ export function PanelEmailMarketing() {
       <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
         <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
         <p className="text-xs text-blue-700 leading-relaxed">
-          El sistema envía automáticamente hasta <strong>4 emails cada 2 horas</strong> desde campañas activas, respetando el límite de 50/día y 300/mes para proteger tu reputación con Gmail.
-          Las variables disponibles en el cuerpo son: <code className="bg-blue-100 px-1 rounded">{'{{nombre}}'}</code> y <code className="bg-blue-100 px-1 rounded">{'{{tienda}}'}</code>
+          Usa <strong>Enviar ahora</strong> <Zap className="inline w-3 h-3" /> para enviar de inmediato con pausas de 4s entre lotes (evita spam).
+          El cron diario (5 AM) también procesa campañas activas automáticamente.
+          Variables: <code className="bg-blue-100 px-1 rounded">{'{{nombre}}'}</code> · <code className="bg-blue-100 px-1 rounded">{'{{tienda}}'}</code>
         </p>
       </div>
 
@@ -223,7 +287,8 @@ export function PanelEmailMarketing() {
               : 0
             const cfg = ESTADO_CFG[campana.estado]
             const estaExpandida = expandida === campana.id
-            const procesando = operando === campana.id
+            const procesando    = operando === campana.id
+            const estaEnviando  = enviandoAhora === campana.id
 
             return (
               <div key={campana.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -269,6 +334,13 @@ export function PanelEmailMarketing() {
                     {campana.total_contactos === 0 && (
                       <p className="text-[10px] text-amber-600 mt-1 font-medium">⚠ Sin contactos — importa una lista para activar</p>
                     )}
+
+                    {estaEnviando && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin text-violet-600" />
+                        <p className="text-[10px] text-violet-700 font-semibold">Enviando · pausa anti-spam entre lotes...</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Acciones */}
@@ -276,10 +348,33 @@ export function PanelEmailMarketing() {
                     <button
                       onClick={() => setImportando(campana)}
                       title="Importar contactos"
-                      className="w-8 h-8 rounded-lg border border-border flex items-center justify-center text-foreground-muted hover:text-primary hover:border-primary/40 transition-all"
+                      disabled={estaEnviando}
+                      className="w-8 h-8 rounded-lg border border-border flex items-center justify-center text-foreground-muted hover:text-primary hover:border-primary/40 transition-all disabled:opacity-30"
                     >
                       <Upload className="w-3.5 h-3.5" />
                     </button>
+
+                    {/* Enviar ahora / Cancelar */}
+                    {campana.estado !== 'completada' && (
+                      estaEnviando ? (
+                        <button
+                          onClick={() => { cancelarRef.current = true }}
+                          title="Cancelar envío"
+                          className="w-8 h-8 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-600 hover:bg-red-100 transition-all"
+                        >
+                          <StopCircle className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => enviarAhora(campana)}
+                          disabled={procesando || !!enviandoAhora}
+                          title="Enviar ahora"
+                          className="w-8 h-8 rounded-lg bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600 hover:bg-violet-100 transition-all disabled:opacity-30"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    )}
 
                     {campana.estado === 'activa' ? (
                       <button
