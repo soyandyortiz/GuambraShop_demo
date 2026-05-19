@@ -425,18 +425,32 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     // DISPARAR LÓGICA UNIFICADA (Stock + Confirmación Citas/Alquileres)
     await supabase.rpc('confirmar_pedido', { p_pedido_id: data.id })
 
-    // Registrar cuotas de crédito
+    // Registrar cuotas de crédito (cuota 1 = cobrada hoy al momento de la venta)
     if (esCredito) {
       const hoy    = obtenerFechaEcuador()
       const fechas = generarFechasCuotas(hoy)
       const cuotasPayload = fechas.map((fecha, i) => {
-        const esUltima = i === creditoCuotas - 1
-        const monto    = esUltima
+        const esUltima  = i === creditoCuotas - 1
+        const monto     = esUltima
           ? +(totalConInteres - montoCuotaCredito * (creditoCuotas - 1)).toFixed(2)
           : montoCuotaCredito
-        return { pedido_id: data.id, numero_cuota: i + 1, monto, fecha_vencimiento: fecha, estado: 'pendiente' }
+        const esPrimera = i === 0
+        return {
+          pedido_id:        data.id,
+          numero_cuota:     i + 1,
+          monto,
+          fecha_vencimiento: fecha,
+          estado:           esPrimera ? 'pagado' : 'pendiente',
+          fecha_pago:       esPrimera ? hoy : null,
+        }
       })
       await supabase.from('cuotas_credito').insert(cuotasPayload)
+
+      // Descontar la primera cuota del saldo pendiente
+      await supabase
+        .from('pedidos')
+        .update({ credito_saldo_pendiente: +(totalConInteres - montoCuotaCredito).toFixed(2) })
+        .eq('id', data.id)
     }
 
     setVentaCreada(data)
@@ -1048,20 +1062,36 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
                     </div>
                   </div>
 
+                  {/* Aviso flujo de cobro */}
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    <CreditCard className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-700 leading-snug">
+                      <span className="font-bold">La cuota 1 se cobra ahora</span> al registrar la venta.
+                      Las cuotas siguientes vencen según la frecuencia elegida.
+                    </p>
+                  </div>
+
                   {/* Plan de pagos */}
                   <div className="flex flex-col gap-1 bg-background-subtle rounded-xl p-2.5">
                     <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wide mb-1">Plan de pagos</p>
                     {fechasCuotas.map((fecha, i) => {
-                      const esUltima = i === creditoCuotas - 1
-                      const monto    = esUltima
+                      const esUltima  = i === creditoCuotas - 1
+                      const esPrimera = i === 0
+                      const monto     = esUltima
                         ? +(totalConInteres - montoCuotaCredito * (creditoCuotas - 1)).toFixed(2)
                         : montoCuotaCredito
                       return (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="text-foreground-muted">
-                            Cuota {i + 1} · {formatFechaCuota(fecha)}
+                        <div key={i} className={cn(
+                          'flex items-center justify-between text-xs rounded-lg px-1.5 py-0.5',
+                          esPrimera && 'bg-success/10'
+                        )}>
+                          <span className={cn('flex items-center gap-1.5', esPrimera ? 'text-success font-semibold' : 'text-foreground-muted')}>
+                            {esPrimera && <CheckCircle2 className="w-3 h-3" />}
+                            Cuota {i + 1} · {esPrimera ? 'Hoy' : formatFechaCuota(fecha)}
                           </span>
-                          <span className="font-semibold text-foreground">{formatearPrecio(monto, simboloMoneda)}</span>
+                          <span className={cn('font-semibold', esPrimera ? 'text-success' : 'text-foreground')}>
+                            {formatearPrecio(monto, simboloMoneda)}
+                          </span>
                         </div>
                       )
                     })}
