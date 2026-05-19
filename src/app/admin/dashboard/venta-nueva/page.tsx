@@ -39,7 +39,7 @@ export default async function PáginaVentaNueva() {
       .order('razon_social'),
     supabase
       .from('configuracion_tienda')
-      .select('nombre_tienda, simbolo_moneda, pais, whatsapp, ticket_ancho_papel, ticket_linea_1, ticket_linea_2, ticket_linea_3, ticket_linea_4, ticket_texto_pie, ticket_pie_2, ticket_mostrar_precio_unit')
+      .select('nombre_tienda, simbolo_moneda, pais, whatsapp, ticket_ancho_papel, ticket_linea_1, ticket_linea_2, ticket_linea_3, ticket_linea_4, ticket_texto_pie, ticket_pie_2, ticket_mostrar_precio_unit, credito_activo, credito_interes_activo, credito_tasa_mensual, credito_cuotas_max')
       .single(),
     supabase
       .from('configuracion_facturacion')
@@ -124,6 +124,10 @@ export default async function PáginaVentaNueva() {
         ticketPie1={(config as any)?.ticket_texto_pie ?? null}
         ticketPie2={(config as any)?.ticket_pie_2 ?? null}
         ticketMostrarPrecioUnit={(config as any)?.ticket_mostrar_precio_unit !== false}
+        creditoActivo={(config as any)?.credito_activo === true}
+        creditoInteresActivo={(config as any)?.credito_interes_activo === true}
+        creditoTasaMensual={Number((config as any)?.credito_tasa_mensual ?? 0)}
+        creditoCuotasMax={Number((config as any)?.credito_cuotas_max ?? 6)}
       />
     </div>
   )

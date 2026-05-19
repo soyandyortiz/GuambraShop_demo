@@ -87,6 +87,10 @@ interface Props {
   nombreTienda?: string
   whatsappTienda?: string | null
   facturacionActiva?: boolean
+  creditoActivo?: boolean
+  creditoInteresActivo?: boolean
+  creditoTasaMensual?: number
+  creditoCuotasMax?: number
   ticketAnchoPapel?: '58' | '80'
   ticketLinea1?: string | null
   ticketLinea2?: string | null
@@ -101,7 +105,7 @@ type EstadoFactura = 'idle' | 'cargando' | 'autorizada' | 'pendiente' | 'error'
 
 // ─── Componente ───────────────────────────────────────────────
 
-export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nombreTienda = 'Mi Tienda', whatsappTienda, facturacionActiva = false, ticketAnchoPapel = '80', ticketLinea1, ticketLinea2, ticketLinea3, ticketLinea4, ticketPie1, ticketPie2, ticketMostrarPrecioUnit = true }: Props) {
+export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nombreTienda = 'Mi Tienda', whatsappTienda, facturacionActiva = false, ticketAnchoPapel = '80', ticketLinea1, ticketLinea2, ticketLinea3, ticketLinea4, ticketPie1, ticketPie2, ticketMostrarPrecioUnit = true, creditoActivo = false, creditoInteresActivo = false, creditoTasaMensual = 0, creditoCuotasMax = 6 }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -165,6 +169,12 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
   const [descTipo, setDescTipo]   = useState<'pct' | 'fijo'>('pct')
   const [descValor, setDescValor] = useState('')
 
+  // ─── Crédito ──────────────────────────────────────────────
+
+  const [esCredito, setEsCredito]                   = useState(false)
+  const [creditoCuotas, setCreditoCuotas]           = useState(3)
+  const [creditoFrecuencia, setCreditoFrecuencia]   = useState<'mensual' | 'quincenal' | 'semanal'>('mensual')
+
   // ─── Totales ──────────────────────────────────────────────
 
   const subtotal      = carrito.reduce((s, i) => s + i.subtotal, 0)
@@ -176,6 +186,39 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     return +Math.min(subtotal, val).toFixed(2)
   }, [descValor, descTipo, subtotal])
   const total = +(subtotal - descuentoMonto).toFixed(2)
+
+  // ─── Cálculos de crédito ──────────────────────────────────
+
+  const DIAS_FRECUENCIA: Record<string, number> = { mensual: 30, quincenal: 15, semanal: 7 }
+  const mesesCredito      = esCredito ? (creditoCuotas * (DIAS_FRECUENCIA[creditoFrecuencia] ?? 30)) / 30 : 0
+  const interesCredito    = esCredito && creditoInteresActivo && creditoTasaMensual > 0
+    ? +(total * (creditoTasaMensual / 100) * mesesCredito).toFixed(2)
+    : 0
+  const totalConInteres   = esCredito ? +(total + interesCredito).toFixed(2) : total
+  const montoCuotaCredito = esCredito && creditoCuotas > 0
+    ? +(totalConInteres / creditoCuotas).toFixed(2)
+    : 0
+
+  function generarFechasCuotas(hoyStr: string): string[] {
+    return Array.from({ length: creditoCuotas }, (_, i) => {
+      const d = new Date(hoyStr + 'T12:00:00')
+      const n = i + 1
+      if (creditoFrecuencia === 'mensual')       d.setMonth(d.getMonth() + n)
+      else if (creditoFrecuencia === 'quincenal') d.setDate(d.getDate() + n * 15)
+      else                                        d.setDate(d.getDate() + n * 7)
+      return d.toISOString().split('T')[0]
+    })
+  }
+
+  const fechasCuotas = useMemo(
+    () => esCredito ? generarFechasCuotas(obtenerFechaEcuador()) : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [esCredito, creditoCuotas, creditoFrecuencia]
+  )
+
+  function formatFechaCuota(d: string) {
+    return new Date(d + 'T12:00:00').toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
 
   // ─── Funciones de carrito ─────────────────────────────────
 
@@ -321,11 +364,20 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
         descuento_cupon:  descuentoMonto,
         cupon_codigo:     descuentoMonto > 0 ? 'DESC' : null,
         costo_envio:      0,
-        total,
+        total:            esCredito ? totalConInteres : total,
         forma_pago:       formaPago,
         es_venta_manual:  true,
         estado:           'completado',
         datos_facturacion,
+        ...(esCredito && {
+          es_credito:              true,
+          credito_cuotas:          creditoCuotas,
+          credito_frecuencia:      creditoFrecuencia,
+          credito_tasa:            creditoInteresActivo ? creditoTasaMensual : 0,
+          credito_total:           totalConInteres,
+          credito_monto_cuota:     montoCuotaCredito,
+          credito_saldo_pendiente: totalConInteres,
+        }),
       })
       .select('id, numero_orden')
       .single()
@@ -373,6 +425,20 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     // DISPARAR LÓGICA UNIFICADA (Stock + Confirmación Citas/Alquileres)
     await supabase.rpc('confirmar_pedido', { p_pedido_id: data.id })
 
+    // Registrar cuotas de crédito
+    if (esCredito) {
+      const hoy    = obtenerFechaEcuador()
+      const fechas = generarFechasCuotas(hoy)
+      const cuotasPayload = fechas.map((fecha, i) => {
+        const esUltima = i === creditoCuotas - 1
+        const monto    = esUltima
+          ? +(totalConInteres - montoCuotaCredito * (creditoCuotas - 1)).toFixed(2)
+          : montoCuotaCredito
+        return { pedido_id: data.id, numero_cuota: i + 1, monto, fecha_vencimiento: fecha, estado: 'pendiente' }
+      })
+      await supabase.from('cuotas_credito').insert(cuotasPayload)
+    }
+
     setVentaCreada(data)
     toast.success(`Venta #${data.numero_orden} registrada`)
     startTransition(() => router.refresh())
@@ -418,6 +484,9 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
     setFormaPago('efectivo')
     setDescValor('')
     setDescTipo('pct')
+    setEsCredito(false)
+    setCreditoCuotas(3)
+    setCreditoFrecuencia('mensual')
     setVentaCreada(null)
     setEstadoFactura('idle')
     setFacturaInfo(null)
@@ -927,6 +996,99 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
             </div>
           </div>
 
+          {/* ── Crédito ──────────────────────────────────────── */}
+          {creditoActivo && carrito.length > 0 && (
+            <div className="rounded-2xl bg-card border border-card-border p-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-foreground-muted uppercase tracking-wide flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5" /> Venta a crédito
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setEsCredito(v => !v)}
+                  className={cn(
+                    'relative w-10 h-5 rounded-full transition-colors flex-shrink-0',
+                    esCredito ? 'bg-primary' : 'bg-border'
+                  )}
+                >
+                  <span className={cn(
+                    'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                    esCredito && 'translate-x-5'
+                  )} />
+                </button>
+              </div>
+
+              {esCredito && (
+                <>
+                  {/* Frecuencia + cuotas */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-foreground-muted font-medium">Frecuencia</label>
+                      <select
+                        value={creditoFrecuencia}
+                        onChange={e => setCreditoFrecuencia(e.target.value as 'mensual' | 'quincenal' | 'semanal')}
+                        className="h-9 px-2 rounded-xl border border-input-border bg-input-bg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="mensual">Mensual</option>
+                        <option value="quincenal">Quincenal</option>
+                        <option value="semanal">Semanal</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] text-foreground-muted font-medium">Cuotas</label>
+                      <select
+                        value={creditoCuotas}
+                        onChange={e => setCreditoCuotas(Number(e.target.value))}
+                        className="h-9 px-2 rounded-xl border border-input-border bg-input-bg text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        {Array.from({ length: creditoCuotasMax }, (_, i) => i + 1).map(n => (
+                          <option key={n} value={n}>{n} cuota{n !== 1 ? 's' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Plan de pagos */}
+                  <div className="flex flex-col gap-1 bg-background-subtle rounded-xl p-2.5">
+                    <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-wide mb-1">Plan de pagos</p>
+                    {fechasCuotas.map((fecha, i) => {
+                      const esUltima = i === creditoCuotas - 1
+                      const monto    = esUltima
+                        ? +(totalConInteres - montoCuotaCredito * (creditoCuotas - 1)).toFixed(2)
+                        : montoCuotaCredito
+                      return (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="text-foreground-muted">
+                            Cuota {i + 1} · {formatFechaCuota(fecha)}
+                          </span>
+                          <span className="font-semibold text-foreground">{formatearPrecio(monto, simboloMoneda)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Resumen interés */}
+                  <div className="flex flex-col gap-1 border-t border-border pt-2 text-xs">
+                    <div className="flex justify-between text-foreground-muted">
+                      <span>Total sin interés</span>
+                      <span>{formatearPrecio(total, simboloMoneda)}</span>
+                    </div>
+                    {interesCredito > 0 && (
+                      <div className="flex justify-between text-amber-600">
+                        <span>Interés ({creditoTasaMensual}% × {mesesCredito.toFixed(1)} meses)</span>
+                        <span>+{formatearPrecio(interesCredito, simboloMoneda)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-foreground">
+                      <span>Total a cobrar</span>
+                      <span className="text-primary">{formatearPrecio(totalConInteres, simboloMoneda)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* ── Descuento manual ─────────────────────────────── */}
           {carrito.length > 0 && (
             <div className="rounded-2xl bg-card border border-card-border p-3 flex flex-col gap-2">
@@ -986,16 +1148,30 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-foreground-muted">Total</span>
-              <span className="text-2xl font-black text-primary">{formatearPrecio(total, simboloMoneda)}</span>
+              <span className="text-sm text-foreground-muted">{esCredito ? 'Total a cobrar' : 'Total'}</span>
+              <span className="text-2xl font-black text-primary">
+                {formatearPrecio(esCredito ? totalConInteres : total, simboloMoneda)}
+              </span>
             </div>
+            {esCredito && (
+              <p className="text-[11px] text-foreground-muted text-right -mt-1">
+                {creditoCuotas} cuota{creditoCuotas !== 1 ? 's' : ''} {creditoFrecuencia}s · {formatearPrecio(montoCuotaCredito, simboloMoneda)} c/u
+              </p>
+            )}
             <button
               onClick={crearVenta}
               disabled={creando || carrito.length === 0}
-              className="w-full h-12 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className={cn(
+                'w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed',
+                esCredito
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-primary hover:opacity-90 text-white'
+              )}
             >
               {creando ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Registrando…</>
+              ) : esCredito ? (
+                <><CreditCard className="w-4 h-4" /> Registrar venta a crédito</>
               ) : (
                 <><Receipt className="w-4 h-4" /> Registrar venta</>
               )}
