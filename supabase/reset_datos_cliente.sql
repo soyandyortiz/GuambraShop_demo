@@ -9,110 +9,71 @@
 
 BEGIN;
 
--- ------------------------------------------------------------
--- 1. FACTURAS Y NOTAS DE CRÉDITO
--- ------------------------------------------------------------
-DELETE FROM facturas;
+-- Función auxiliar para borrar solo si la tabla existe
+CREATE OR REPLACE FUNCTION _borrar_si_existe(p_tabla TEXT) RETURNS VOID AS $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = p_tabla) THEN
+    EXECUTE format('DELETE FROM %I', p_tabla);
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------
--- 2. PROFORMAS
+-- TABLAS (orden respeta las FK)
 -- ------------------------------------------------------------
-DELETE FROM proformas;
+SELECT _borrar_si_existe('facturas');
+SELECT _borrar_si_existe('proformas');
+SELECT _borrar_si_existe('alquileres');
+SELECT _borrar_si_existe('citas');
+SELECT _borrar_si_existe('pedidos');
+SELECT _borrar_si_existe('clientes');
+SELECT _borrar_si_existe('solicitudes_evento');
+SELECT _borrar_si_existe('leads');
+SELECT _borrar_si_existe('likes_producto');
+SELECT _borrar_si_existe('resenas_producto');
+SELECT _borrar_si_existe('mensajes_admin');
 
 -- ------------------------------------------------------------
--- 4. ALQUILERES
+-- REINICIAR SECUENCIAS DE NUMERACIÓN
 -- ------------------------------------------------------------
-DELETE FROM alquileres;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'pedidos_numero_seq') THEN
+    ALTER SEQUENCE pedidos_numero_seq RESTART WITH 1;
+  END IF;
+  IF EXISTS (SELECT FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'solicitudes_numero_seq') THEN
+    ALTER SEQUENCE solicitudes_numero_seq RESTART WITH 1;
+  END IF;
+  IF EXISTS (SELECT FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'proformas_numero_seq') THEN
+    ALTER SEQUENCE proformas_numero_seq RESTART WITH 1;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------
--- 5. CITAS
+-- REINICIAR CONTADORES DE FACTURACIÓN SRI
 -- ------------------------------------------------------------
-DELETE FROM citas;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'configuracion_facturacion') THEN
+    UPDATE configuracion_facturacion
+    SET secuencial_actual = 1, secuencial_nc_actual = 1;
+  END IF;
+END $$;
 
--- ------------------------------------------------------------
--- 6. PEDIDOS
--- ------------------------------------------------------------
-DELETE FROM pedidos;
-
--- ------------------------------------------------------------
--- 7. CLIENTES
--- ------------------------------------------------------------
-DELETE FROM clientes;
-
--- ------------------------------------------------------------
--- 8. SOLICITUDES DE EVENTO
--- ------------------------------------------------------------
-DELETE FROM solicitudes_evento;
-
--- ------------------------------------------------------------
--- 9. LEADS (teléfonos capturados por modales)
--- ------------------------------------------------------------
-DELETE FROM leads;
-
--- ------------------------------------------------------------
--- 10. LIKES DE PRODUCTOS (anónimos)
--- ------------------------------------------------------------
-DELETE FROM likes_producto;
-
--- ------------------------------------------------------------
--- 11. RESEÑAS DE PRODUCTOS
--- ------------------------------------------------------------
-DELETE FROM resenas_producto;
-
--- ------------------------------------------------------------
--- 12. MENSAJES DEL SUPERADMIN AL ADMIN
--- ------------------------------------------------------------
-DELETE FROM mensajes_admin;
-
--- ------------------------------------------------------------
--- 14. REINICIAR SECUENCIAS DE NUMERACIÓN
--- ------------------------------------------------------------
-
--- Pedidos: ORD-00001 al siguiente
-ALTER SEQUENCE pedidos_numero_seq RESTART WITH 1;
-
--- Solicitudes de evento: SOL-00001 al siguiente
-ALTER SEQUENCE solicitudes_numero_seq RESTART WITH 1;
-
--- Proformas: PRO-001 al siguiente
-ALTER SEQUENCE proformas_numero_seq RESTART WITH 1;
-
--- ------------------------------------------------------------
--- 15. REINICIAR CONTADORES DE FACTURACIÓN SRI
---     secuencial_actual  → próxima factura será 000000001
---     secuencial_nc_actual → próxima nota de crédito será 000000001
--- ------------------------------------------------------------
-UPDATE configuracion_facturacion
-SET
-  secuencial_actual    = 1,
-  secuencial_nc_actual = 1;
+-- Limpiar función auxiliar
+DROP FUNCTION _borrar_si_existe(TEXT);
 
 COMMIT;
 
 -- ------------------------------------------------------------
--- VERIFICACIÓN (ejecutar después del COMMIT para confirmar)
+-- VERIFICACIÓN
 -- ------------------------------------------------------------
-SELECT 'pedidos'           AS tabla, COUNT(*) AS registros FROM pedidos
-UNION ALL
-SELECT 'clientes',                   COUNT(*) FROM clientes
-UNION ALL
-SELECT 'citas',                      COUNT(*) FROM citas
-UNION ALL
-SELECT 'alquileres',                 COUNT(*) FROM alquileres
-UNION ALL
-SELECT 'solicitudes_evento',         COUNT(*) FROM solicitudes_evento
-UNION ALL
-SELECT 'facturas',                   COUNT(*) FROM facturas
-UNION ALL
-SELECT 'proformas',                  COUNT(*) FROM proformas
-UNION ALL
-SELECT 'cuentas_por_cobrar',         COUNT(*) FROM cuentas_por_cobrar
-UNION ALL
-SELECT 'leads',                      COUNT(*) FROM leads
-UNION ALL
-SELECT 'likes_producto',             COUNT(*) FROM likes_producto
-UNION ALL
-SELECT 'resenas_producto',           COUNT(*) FROM resenas_producto
-UNION ALL
-SELECT 'mensajes_admin',             COUNT(*) FROM mensajes_admin
-ORDER BY tabla;
+SELECT tabla, registros FROM (
+  SELECT 1 AS ord, 'pedidos'           AS tabla, COUNT(*)::int AS registros FROM pedidos
+  UNION ALL SELECT 2, 'clientes',          COUNT(*) FROM clientes
+  UNION ALL SELECT 3, 'citas',             COUNT(*) FROM citas
+  UNION ALL SELECT 4, 'alquileres',        COUNT(*) FROM alquileres
+  UNION ALL SELECT 5, 'solicitudes_evento',COUNT(*) FROM solicitudes_evento
+  UNION ALL SELECT 6, 'facturas',          COUNT(*) FROM facturas
+  UNION ALL SELECT 7, 'likes_producto',    COUNT(*) FROM likes_producto
+  UNION ALL SELECT 8, 'resenas_producto',  COUNT(*) FROM resenas_producto
+  UNION ALL SELECT 9, 'mensajes_admin',    COUNT(*) FROM mensajes_admin
+) t ORDER BY ord;
