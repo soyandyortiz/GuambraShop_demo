@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Mail, Plus, Play, Pause, Trash2, Upload,
+  Mail, Plus, Play, Pause, Trash2, Upload, Download,
   Users, CheckCircle2, XCircle, Clock, BarChart3,
   ChevronDown, ChevronUp, AlertCircle, Loader2, Send, Eye, Zap, StopCircle
 } from 'lucide-react'
@@ -31,6 +31,22 @@ interface ContadorDia { enviados: number }
 
 const LIMITE_DIARIO  = 50
 const LIMITE_MENSUAL = 300
+
+function descargarPlantilla() {
+  const filas = [
+    ['Nombre', 'Email', 'WhatsApp'],
+    ['Juan Pérez', 'juan@ejemplo.com', '0991234567'],
+    ['María García', 'maria@ejemplo.com', '0987654321'],
+    ['Pedro López', 'pedro@ejemplo.com', ''],
+  ]
+  import('xlsx').then(XLSX => {
+    const ws = XLSX.utils.aoa_to_sheet(filas)
+    ws['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 15 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Contactos')
+    XLSX.writeFile(wb, 'plantilla_contactos.xlsx')
+  })
+}
 
 const ESTADO_CFG = {
   borrador:    { label: 'Borrador',   clase: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -260,12 +276,20 @@ export function PanelEmailMarketing() {
       {/* ── ENCABEZADO LISTA ── */}
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-foreground">Campañas de email</h3>
-        <button
-          onClick={() => setModalCrear(true)}
-          className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all"
-        >
-          <Plus className="w-4 h-4" /> Nueva campaña
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={descargarPlantilla}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-border text-xs font-semibold text-foreground-muted hover:text-foreground hover:bg-background-subtle transition-all"
+          >
+            <Download className="w-3.5 h-3.5" /> Plantilla Excel
+          </button>
+          <button
+            onClick={() => setModalCrear(true)}
+            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all"
+          >
+            <Plus className="w-4 h-4" /> Nueva campaña
+          </button>
+        </div>
       </div>
 
       {/* ── LISTA ── */}
