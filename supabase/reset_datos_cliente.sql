@@ -15,12 +15,7 @@ BEGIN;
 DELETE FROM facturas;
 
 -- ------------------------------------------------------------
--- 2. CUENTAS POR COBRAR
--- ------------------------------------------------------------
-DELETE FROM cuentas_por_cobrar;
-
--- ------------------------------------------------------------
--- 3. PROFORMAS
+-- 2. PROFORMAS
 -- ------------------------------------------------------------
 DELETE FROM proformas;
 
@@ -68,11 +63,6 @@ DELETE FROM resenas_producto;
 -- 12. MENSAJES DEL SUPERADMIN AL ADMIN
 -- ------------------------------------------------------------
 DELETE FROM mensajes_admin;
-
--- ------------------------------------------------------------
--- 13. ANALYTICS / VISITAS
--- ------------------------------------------------------------
-DELETE FROM analytics;
 
 -- ------------------------------------------------------------
 -- 14. REINICIAR SECUENCIAS DE NUMERACIÓN
@@ -125,6 +115,4 @@ UNION ALL
 SELECT 'resenas_producto',           COUNT(*) FROM resenas_producto
 UNION ALL
 SELECT 'mensajes_admin',             COUNT(*) FROM mensajes_admin
-UNION ALL
-SELECT 'analytics',                  COUNT(*) FROM analytics
 ORDER BY tabla;
