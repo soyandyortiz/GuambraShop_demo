@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Mail, Plus, Play, Pause, Trash2, Upload, Download,
   Users, CheckCircle2, XCircle, Clock, BarChart3,
-  ChevronDown, ChevronUp, AlertCircle, Loader2, Send, Eye, Zap, StopCircle
+  ChevronDown, ChevronUp, Loader2, Send, Eye, Zap, StopCircle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -263,13 +263,30 @@ export function PanelEmailMarketing() {
         </div>
       </div>
 
-      {/* ── AVISO CRON ── */}
-      <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
-        <AlertCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-blue-700 leading-relaxed">
-          Usa <strong>Enviar ahora</strong> <Zap className="inline w-3 h-3" /> para enviar de inmediato con pausas de 4s entre lotes (evita spam).
-          El cron diario (5 AM) también procesa campañas activas automáticamente.
-          Variables: <code className="bg-blue-100 px-1 rounded">{'{{nombre}}'}</code> · <code className="bg-blue-100 px-1 rounded">{'{{tienda}}'}</code>
+      {/* ── TUTORIAL ── */}
+      <div className="rounded-xl border border-border bg-background-subtle p-4 flex flex-col gap-3">
+        <p className="text-xs font-bold text-foreground uppercase tracking-widest">¿Cómo usar el email marketing?</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { n: '1', titulo: 'Crea una campaña', desc: 'Ponle nombre, asunto y escribe el email con el botón "Nueva campaña".' },
+            { n: '2', titulo: 'Importa contactos', desc: 'Haz clic en el ícono 📤 de la campaña y sube el Excel con la lista.' },
+            { n: '3', titulo: 'Envía ahora', desc: 'Usa el botón ⚡ para enviar de inmediato. Se hacen pausas automáticas para evitar spam.' },
+            { n: '4', titulo: 'O espera el cron', desc: 'Si no tocas nada, el sistema envía automáticamente cada día a las 5 AM.' },
+          ].map(paso => (
+            <div key={paso.n} className="flex gap-2.5 items-start">
+              <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-[10px] font-black text-white">{paso.n}</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-foreground">{paso.titulo}</p>
+                <p className="text-[10px] text-foreground-muted leading-snug mt-0.5">{paso.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-foreground-muted border-t border-border pt-2">
+          Límite: <strong>50 emails/día · 300/mes</strong> en el plan gratuito.
+          Variables disponibles en el editor: <code className="bg-border/60 px-1 rounded">{'{{nombre}}'}</code> · <code className="bg-border/60 px-1 rounded">{'{{tienda}}'}</code>
         </p>
       </div>
 
@@ -298,10 +315,20 @@ export function PanelEmailMarketing() {
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       ) : campanas.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 text-foreground-muted/30">
-          <Mail className="w-12 h-12" />
-          <p className="text-sm font-bold">Aún no hay campañas</p>
-          <p className="text-xs">Crea tu primera campaña para comenzar</p>
+        <div className="flex flex-col items-center gap-3 py-14 rounded-2xl border border-dashed border-border">
+          <Mail className="w-10 h-10 text-foreground-muted/20" />
+          <div className="text-center">
+            <p className="text-sm font-bold text-foreground-muted/50">Aún no hay campañas</p>
+            <p className="text-xs text-foreground-muted/40 mt-1">
+              Crea tu primera campaña → luego usa el ícono <Upload className="inline w-3 h-3" /> para importar contactos
+            </p>
+          </div>
+          <button
+            onClick={() => setModalCrear(true)}
+            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all mt-1"
+          >
+            <Plus className="w-4 h-4" /> Crear primera campaña
+          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">

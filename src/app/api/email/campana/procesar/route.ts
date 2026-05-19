@@ -8,6 +8,14 @@ const LIMITE_DIARIO   = 50
 const LIMITE_MENSUAL  = 300
 const MAX_POR_RUN     = 4   // 4 emails × ~400ms ≈ 1.6s activo por ejecución
 
+const SEP_FIRMA = '\n\n<!-- FIRMA -->\n'
+
+function splitCuerpoFirma(cuerpo: string): { body: string; firma: string | null } {
+  const idx = cuerpo.indexOf(SEP_FIRMA)
+  if (idx >= 0) return { body: cuerpo.slice(0, idx), firma: cuerpo.slice(idx + SEP_FIRMA.length) }
+  return { body: cuerpo, firma: null }
+}
+
 function plantillaHtml(opts: {
   cuerpo: string
   nombreTienda: string
@@ -16,6 +24,15 @@ function plantillaHtml(opts: {
 }) {
   const logo = opts.logoUrl
     ? `<img src="${opts.logoUrl}" alt="${opts.nombreTienda}" style="max-height:60px;max-width:160px;margin-bottom:12px;object-fit:contain">`
+    : ''
+
+  const { body, firma } = splitCuerpoFirma(opts.cuerpo)
+  const esHtml = /<[a-z][^>]*>/i.test(body)
+  const bodyHtml = esHtml ? body : body.replace(/\n/g, '<br>')
+  const firmaHtml = firma
+    ? `<tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;color:#6b7280;font-size:12px;white-space:pre-wrap">
+        ${firma.replace(/\n/g, '<br>')}
+       </td></tr>`
     : ''
 
   return `<!DOCTYPE html>
@@ -34,9 +51,10 @@ function plantillaHtml(opts: {
           <h2 style="color:#f8fafc;margin:0;font-size:18px;font-weight:700">${opts.nombreTienda}</h2>
         </td></tr>
         <tr><td style="background:#ffffff;padding:36px 32px;color:#111827;font-size:15px;line-height:1.7">
-          ${opts.cuerpo.replace(/\n/g, '<br>')}
+          ${bodyHtml}
         </td></tr>
-        <tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:20px 32px;text-align:center;color:#9ca3af;font-size:11px">
+        ${firmaHtml}
+        <tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;color:#9ca3af;font-size:11px">
           <p style="margin:0">${opts.nombreTienda} · Ecuador</p>
           <p style="margin:4px 0 0">Has recibido este email porque eres cliente de nuestra tienda.</p>
         </td></tr>
