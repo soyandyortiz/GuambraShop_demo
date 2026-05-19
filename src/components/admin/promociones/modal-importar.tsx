@@ -11,10 +11,14 @@ import { cn } from '@/lib/utils'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
 
 interface Contacto { nombre: string; email: string; whatsapp: string; valido: boolean; error?: string }
+interface ContactoValido { nombre: string; email: string; whatsapp: string }
+
 interface Props {
-  campana: { id: string; nombre: string }
+  campana?: { id: string; nombre: string }
   alCerrar: () => void
   alImportar: () => void
+  // Modo sin campaña: devuelve los contactos válidos al padre en lugar de guardar en DB
+  alCapturarLista?: (contactos: ContactoValido[]) => void
 }
 
 function validarEmail(email: string) {
@@ -85,7 +89,8 @@ function descargarPlantilla() {
   })
 }
 
-export function ModalImportar({ campana, alCerrar, alImportar }: Props) {
+export function ModalImportar({ campana, alCerrar, alImportar, alCapturarLista }: Props) {
+  const modoCapturaLista = !campana && !!alCapturarLista
   const [contactos, setContactos]   = useState<Contacto[]>([])
   const [archivo,   setArchivo]     = useState<string>('')
   const [guardando, setGuardando]   = useState(false)
@@ -132,11 +137,18 @@ export function ModalImportar({ campana, alCerrar, alImportar }: Props) {
 
   async function confirmarImportar() {
     if (validos.length === 0) { toast.error('No hay contactos válidos para importar'); return }
+
+    // Modo sin campaña: devolver lista al padre
+    if (modoCapturaLista) {
+      alCapturarLista!(validos.map(c => ({ nombre: c.nombre, email: c.email, whatsapp: c.whatsapp })))
+      return
+    }
+
+    if (!campana) return
     setGuardando(true)
     const supabase = crearClienteSupabase()
 
-    // Insertar en lotes de 100
-    const lotes = []
+    const lotes: typeof validos[] = []
     for (let i = 0; i < validos.length; i += 100) lotes.push(validos.slice(i, i + 100))
 
     for (const lote of lotes) {
@@ -151,7 +163,6 @@ export function ModalImportar({ campana, alCerrar, alImportar }: Props) {
       if (error) { toast.error('Error al guardar contactos'); setGuardando(false); return }
     }
 
-    // Actualizar total_contactos en la campaña
     const { data: actual } = await supabase
       .from('campanas_email').select('total_contactos').eq('id', campana.id).single()
 
@@ -175,7 +186,9 @@ export function ModalImportar({ campana, alCerrar, alImportar }: Props) {
             </div>
             <div>
               <h2 className="font-bold text-foreground">Importar contactos</h2>
-              <p className="text-xs text-foreground-muted">{campana.nombre}</p>
+              <p className="text-xs text-foreground-muted">
+                {campana ? campana.nombre : 'Paso 1 de 2 — selecciona tu lista de contactos'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -313,7 +326,11 @@ export function ModalImportar({ campana, alCerrar, alImportar }: Props) {
               >
                 {guardando
                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
-                  : <><CheckCircle2 className="w-4 h-4" /> Importar {validos.length} contactos</>}
+                  : <><CheckCircle2 className="w-4 h-4" />
+                    {modoCapturaLista
+                      ? `Confirmar ${validos.length} contactos → Crear mensaje`
+                      : `Importar ${validos.length} contactos`
+                    }</>}
               </button>
             </div>
           )}

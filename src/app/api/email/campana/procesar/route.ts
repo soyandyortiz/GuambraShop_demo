@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmail } from '@/lib/email/enviar'
+import { plantillaHtml, parseCuerpo } from '@/lib/email/templates'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 55
@@ -8,62 +9,7 @@ const LIMITE_DIARIO   = 50
 const LIMITE_MENSUAL  = 300
 const MAX_POR_RUN     = 4   // 4 emails × ~400ms ≈ 1.6s activo por ejecución
 
-const SEP_FIRMA = '\n\n<!-- FIRMA -->\n'
-
-function splitCuerpoFirma(cuerpo: string): { body: string; firma: string | null } {
-  const idx = cuerpo.indexOf(SEP_FIRMA)
-  if (idx >= 0) return { body: cuerpo.slice(0, idx), firma: cuerpo.slice(idx + SEP_FIRMA.length) }
-  return { body: cuerpo, firma: null }
-}
-
-function plantillaHtml(opts: {
-  cuerpo: string
-  nombreTienda: string
-  logoUrl: string | null
-  asunto: string
-}) {
-  const logo = opts.logoUrl
-    ? `<img src="${opts.logoUrl}" alt="${opts.nombreTienda}" style="max-height:60px;max-width:160px;margin-bottom:12px;object-fit:contain">`
-    : ''
-
-  const { body, firma } = splitCuerpoFirma(opts.cuerpo)
-  const esHtml = /<[a-z][^>]*>/i.test(body)
-  const bodyHtml = esHtml ? body : body.replace(/\n/g, '<br>')
-  const firmaHtml = firma
-    ? `<tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;color:#6b7280;font-size:12px;white-space:pre-wrap">
-        ${firma.replace(/\n/g, '<br>')}
-       </td></tr>`
-    : ''
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${opts.asunto}</title>
-</head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding:40px 16px">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
-        <tr><td style="background:#1e293b;padding:28px 32px;text-align:center">
-          ${logo}
-          <h2 style="color:#f8fafc;margin:0;font-size:18px;font-weight:700">${opts.nombreTienda}</h2>
-        </td></tr>
-        <tr><td style="background:#ffffff;padding:36px 32px;color:#111827;font-size:15px;line-height:1.7">
-          ${bodyHtml}
-        </td></tr>
-        ${firmaHtml}
-        <tr><td style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;color:#9ca3af;font-size:11px">
-          <p style="margin:0">${opts.nombreTienda} · Ecuador</p>
-          <p style="margin:4px 0 0">Has recibido este email porque eres cliente de nuestra tienda.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`
-}
+// plantillaHtml y parseCuerpo provienen de @/lib/email/templates
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET

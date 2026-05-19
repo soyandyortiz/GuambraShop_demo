@@ -59,6 +59,8 @@ export function PanelEmailMarketing() {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
+  interface ContactoPendiente { nombre: string; email: string; whatsapp: string }
+
   const [campanas,     setCampanas]     = useState<Campana[]>([])
   const [enviadosHoy,  setEnviadosHoy]  = useState(0)
   const [enviadosMes,  setEnviadosMes]  = useState(0)
@@ -66,6 +68,8 @@ export function PanelEmailMarketing() {
   const [modalCrear,   setModalCrear]   = useState(false)
   const [editando,     setEditando]     = useState<Campana | null>(null)
   const [importando,   setImportando]   = useState<Campana | null>(null)
+  const [modalImportarLista, setModalImportarLista] = useState(false)   // import sin campaña
+  const [contactosPendientes, setContactosPendientes] = useState<ContactoPendiente[] | null>(null)
   const [expandida,    setExpandida]    = useState<string | null>(null)
   const [operando,     setOperando]     = useState<string | null>(null)
   const [enviandoAhora, setEnviandoAhora] = useState<string | null>(null)
@@ -131,6 +135,35 @@ export function PanelEmailMarketing() {
     toast.success(nuevoEstado === 'activa' ? '▶ Campaña activada' : '⏸ Campaña pausada')
     await cargar()
     setOperando(null)
+    startTransition(() => router.refresh())
+  }
+
+  async function guardarCampanaConContactos(campanaId?: string) {
+    setModalCrear(false)
+    if (campanaId && contactosPendientes && contactosPendientes.length > 0) {
+      const supabase = crearClienteSupabase()
+      const lotes: ContactoPendiente[][] = []
+      for (let i = 0; i < contactosPendientes.length; i += 100)
+        lotes.push(contactosPendientes.slice(i, i + 100))
+
+      for (const lote of lotes) {
+        await supabase.from('contactos_campana').insert(
+          lote.map(c => ({
+            campana_id: campanaId,
+            nombre:     c.nombre || null,
+            email:      c.email,
+            whatsapp:   c.whatsapp || null,
+          }))
+        )
+      }
+      await supabase.from('campanas_email')
+        .update({ total_contactos: contactosPendientes.length })
+        .eq('id', campanaId)
+
+      toast.success(`Campaña creada con ${contactosPendientes.length} contactos`)
+      setContactosPendientes(null)
+    }
+    await cargar()
     startTransition(() => router.refresh())
   }
 
@@ -265,13 +298,13 @@ export function PanelEmailMarketing() {
 
       {/* ── TUTORIAL ── */}
       <div className="rounded-xl border border-border bg-background-subtle p-4 flex flex-col gap-3">
-        <p className="text-xs font-bold text-foreground uppercase tracking-widest">¿Cómo usar el email marketing?</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <p className="text-[10px] font-bold text-foreground-muted uppercase tracking-widest">¿Cómo enviar emails masivos?</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { n: '1', titulo: 'Crea una campaña', desc: 'Ponle nombre, asunto y escribe el email con el botón "Nueva campaña".' },
-            { n: '2', titulo: 'Importa contactos', desc: 'Haz clic en el ícono 📤 de la campaña y sube el Excel con la lista.' },
-            { n: '3', titulo: 'Envía ahora', desc: 'Usa el botón ⚡ para enviar de inmediato. Se hacen pausas automáticas para evitar spam.' },
-            { n: '4', titulo: 'O espera el cron', desc: 'Si no tocas nada, el sistema envía automáticamente cada día a las 5 AM.' },
+            { n: '1', titulo: 'Descarga la plantilla', desc: 'Haz clic en "Plantilla Excel" para obtener el formato correcto.' },
+            { n: '2', titulo: 'Importa tu lista', desc: 'Llena el Excel y cárgalo con el botón "Importar lista".' },
+            { n: '3', titulo: 'Crea el mensaje', desc: 'Redacta el email, elige diseño y agrega firma. Sin código HTML.' },
+            { n: '4', titulo: 'Envía', desc: 'Usa ⚡ para enviar ahora, o el sistema lo hace automáticamente a las 5 AM.' },
           ].map(paso => (
             <div key={paso.n} className="flex gap-2.5 items-start">
               <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -285,14 +318,14 @@ export function PanelEmailMarketing() {
           ))}
         </div>
         <p className="text-[10px] text-foreground-muted border-t border-border pt-2">
-          Límite: <strong>50 emails/día · 300/mes</strong> en el plan gratuito.
-          Variables disponibles en el editor: <code className="bg-border/60 px-1 rounded">{'{{nombre}}'}</code> · <code className="bg-border/60 px-1 rounded">{'{{tienda}}'}</code>
+          Límite del plan gratuito: <strong>50 emails/día · 300/mes</strong>.
+          Variables disponibles: <code className="bg-border/60 px-1 rounded">{'{{nombre}}'}</code> · <code className="bg-border/60 px-1 rounded">{'{{tienda}}'}</code>
         </p>
       </div>
 
       {/* ── ENCABEZADO LISTA ── */}
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-foreground">Campañas de email</h3>
+        <h3 className="text-base font-bold text-foreground">Mis campañas</h3>
         <div className="flex items-center gap-2">
           <button
             onClick={descargarPlantilla}
@@ -300,12 +333,39 @@ export function PanelEmailMarketing() {
           >
             <Download className="w-3.5 h-3.5" /> Plantilla Excel
           </button>
-          <button
-            onClick={() => setModalCrear(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all"
-          >
-            <Plus className="w-4 h-4" /> Nueva campaña
-          </button>
+
+          {/* Botón principal: cambia según si hay contactos pendientes o ya hay campañas */}
+          {contactosPendientes ? (
+            <button
+              onClick={() => setModalCrear(true)}
+              className="flex items-center gap-2 h-9 px-4 rounded-xl bg-emerald-600 text-white text-sm font-bold shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Crear mensaje · {contactosPendientes.length} contactos
+            </button>
+          ) : campanas.length > 0 ? (
+            <>
+              <button
+                onClick={() => setModalImportarLista(true)}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-border text-xs font-semibold text-foreground-muted hover:text-foreground hover:bg-background-subtle transition-all"
+              >
+                <Upload className="w-3.5 h-3.5" /> Importar lista
+              </button>
+              <button
+                onClick={() => setModalCrear(true)}
+                className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Crear mensaje
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setModalImportarLista(true)}
+              className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all"
+            >
+              <Upload className="w-4 h-4" /> Importar lista
+            </button>
+          )}
         </div>
       </div>
 
@@ -315,20 +375,20 @@ export function PanelEmailMarketing() {
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       ) : campanas.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-14 rounded-2xl border border-dashed border-border">
+        <div className="flex flex-col items-center gap-4 py-14 rounded-2xl border border-dashed border-border">
           <Mail className="w-10 h-10 text-foreground-muted/20" />
           <div className="text-center">
             <p className="text-sm font-bold text-foreground-muted/50">Aún no hay campañas</p>
-            <p className="text-xs text-foreground-muted/40 mt-1">
-              Crea tu primera campaña → luego usa el ícono <Upload className="inline w-3 h-3" /> para importar contactos
-            </p>
+            {contactosPendientes ? (
+              <p className="text-xs text-emerald-600 font-semibold mt-1">
+                ✓ {contactosPendientes.length} contactos listos — ahora crea tu mensaje con el botón de arriba
+              </p>
+            ) : (
+              <p className="text-xs text-foreground-muted/40 mt-1">
+                Empieza descargando la <strong>Plantilla Excel</strong> e importando tu lista de contactos
+              </p>
+            )}
           </div>
-          <button
-            onClick={() => setModalCrear(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-primary/20 hover:bg-primary/90 transition-all mt-1"
-          >
-            <Plus className="w-4 h-4" /> Crear primera campaña
-          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -499,7 +559,10 @@ export function PanelEmailMarketing() {
         <ModalCampana
           campana={editando ?? undefined}
           alCerrar={() => { setModalCrear(false); setEditando(null) }}
-          alGuardar={() => { setModalCrear(false); setEditando(null); cargar() }}
+          alGuardar={async (campanaId) => {
+            setEditando(null)
+            await guardarCampanaConContactos(campanaId)
+          }}
         />
       )}
 
@@ -508,6 +571,19 @@ export function PanelEmailMarketing() {
           campana={importando}
           alCerrar={() => setImportando(null)}
           alImportar={() => { setImportando(null); cargar() }}
+        />
+      )}
+
+      {modalImportarLista && (
+        <ModalImportar
+          alCerrar={() => setModalImportarLista(false)}
+          alImportar={() => setModalImportarLista(false)}
+          alCapturarLista={contactos => {
+            setContactosPendientes(contactos)
+            setModalImportarLista(false)
+            toast.success(`${contactos.length} contactos listos — ahora crea tu mensaje`)
+            setModalCrear(true)
+          }}
         />
       )}
     </div>
