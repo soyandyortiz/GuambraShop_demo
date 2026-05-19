@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { PedidoCC, CuotaCC } from './page'
+import type { PedidoCC, CuotaCC } from './types'
 import { AlertTriangle, CheckCircle2, Clock, TrendingDown, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

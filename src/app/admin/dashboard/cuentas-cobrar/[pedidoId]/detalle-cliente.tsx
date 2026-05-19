@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
-import { PedidoDetalle, CuotaDetalle, AbonoDetalle } from './page'
+import type { PedidoDetalle, CuotaDetalle, AbonoDetalle } from './types'
 import { AlertTriangle, CheckCircle2, Clock, ArrowLeft, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
