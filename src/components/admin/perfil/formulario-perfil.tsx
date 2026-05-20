@@ -501,6 +501,7 @@ function TabColores({ config }: { config: ConfigTienda }) {
       .single()
     setGuardandoColor(false)
     if (error || !data) {
+      console.error('[guardarColor] error:', error, '| data:', data, '| config.id:', config.id)
       toast.error('Error al guardar color — verifica permisos')
       setColorActual(colorActual)
       return
