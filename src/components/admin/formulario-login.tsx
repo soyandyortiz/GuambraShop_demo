@@ -18,8 +18,8 @@ const esquema = z.object({
 
 type DatosLogin = z.infer<typeof esquema>
 
-const DEMO_USUARIO = 'demo'
-const DEMO_CONTRASENA = 'demo123'
+const DEMO_USUARIO = 'demo@guambrashop.com'
+const DEMO_CONTRASENA = 'admin123'
 const SOPORTE_WHATSAPP = '593982650929'
 
 const FOTOS_CHIMBORAZO = [
@@ -118,7 +118,7 @@ export function FormularioLogin() {
     }
 
     const emailIngresado = normalizarEmail(datos.email)
-    if (emailIngresado === 'demo@tiendademo.local') {
+    if (emailIngresado === 'demo@tiendademo.local' || emailIngresado === 'demo@guambrashop.com') {
       localStorage.setItem(CLAVE_DEMO, 'true')
     } else {
       localStorage.removeItem(CLAVE_DEMO)
@@ -321,23 +321,21 @@ export function FormularioLogin() {
             </form>
 
             {/* Demo box */}
-            {process.env.NEXT_PUBLIC_MOSTRAR_DEMO === 'true' && (
-              <button
-                type="button"
-                onClick={rellenarDemo}
-                className="w-full mt-6 rounded-2xl border-2 border-amber-400 bg-amber-400 px-4 py-3 text-left hover:bg-amber-500 hover:border-amber-500 transition-colors group"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <FlaskConical className="w-3.5 h-3.5 text-amber-900 flex-shrink-0" />
-                  <p className="text-xs font-bold text-amber-900 uppercase tracking-wide">Modo Demo</p>
-                  <span className="ml-auto text-[10px] font-semibold text-amber-800 group-hover:underline">Clic para rellenar</span>
-                </div>
-                <div className="flex gap-4 text-xs text-amber-950 font-medium">
-                  <span>Usuario: <span className="font-bold">{DEMO_USUARIO}</span></span>
-                  <span>Contraseña: <span className="font-bold">{DEMO_CONTRASENA}</span></span>
-                </div>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={rellenarDemo}
+              className="w-full mt-6 rounded-2xl border-2 border-amber-400 bg-amber-400 px-4 py-3 text-left hover:bg-amber-500 hover:border-amber-500 transition-colors group"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <FlaskConical className="w-3.5 h-3.5 text-amber-900 flex-shrink-0" />
+                <p className="text-xs font-bold text-amber-900 uppercase tracking-wide">Modo Demo</p>
+                <span className="ml-auto text-[10px] font-semibold text-amber-800 group-hover:underline">Clic para rellenar</span>
+              </div>
+              <div className="flex flex-col gap-1 text-xs text-amber-950 font-medium">
+                <span>Usuario: <span className="font-bold">{DEMO_USUARIO}</span></span>
+                <span>Contraseña: <span className="font-bold">{DEMO_CONTRASENA}</span></span>
+              </div>
+            </button>
 
             {/* Soporte en móvil (solo visible en pantallas pequeñas) */}
             <div className="lg:hidden mt-6 rounded-2xl bg-muted/60 border border-border px-4 py-3 flex items-center justify-between gap-3">
