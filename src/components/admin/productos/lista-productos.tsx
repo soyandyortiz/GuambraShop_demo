@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { useDemoDatos } from '@/hooks/usar-demo-datos'
 
 interface ImagenProducto { url: string; orden: number }
+interface VarianteStockFila { stock_variante: number | null; esta_activa: boolean; tipo_precio: string | null }
 interface ProductoFila {
   id: string
   nombre: string
@@ -21,6 +22,17 @@ interface ProductoFila {
   stock: number | null
   tipo_producto: string | null
   imagenes_producto: ImagenProducto[]
+  variantes_producto?: VarianteStockFila[]
+}
+
+function stockEfectivo(p: ProductoFila): number | null {
+  const variantesReemplaza = (p.variantes_producto ?? []).filter(
+    v => v.esta_activa && (v.tipo_precio ?? 'reemplaza') === 'reemplaza'
+  )
+  if (variantesReemplaza.length > 0) {
+    return variantesReemplaza.reduce((sum, v) => sum + (v.stock_variante ?? 0), 0)
+  }
+  return p.stock
 }
 interface Categoria { id: string; nombre: string }
 
@@ -40,17 +52,18 @@ export function ListaProductosAdmin({ productos: productosServidor, categorias }
   const filtrados = productos.filter(p => {
     const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
     const coincideCategoria = categoriaFiltro === 'todas' || p.categoria_id === categoriaFiltro
-    const esProductoFisico = p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && p.stock !== null
+    const se = stockEfectivo(p)
+    const esProductoFisico = p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && se !== null
     const coincideEstado = estadoFiltro === 'todos'
       || (estadoFiltro === 'activos'    && p.esta_activo)
       || (estadoFiltro === 'inactivos'  && !p.esta_activo)
-      || (estadoFiltro === 'stock_bajo' && esProductoFisico && (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5)
-      || (estadoFiltro === 'agotados'   && esProductoFisico && p.stock === 0)
+      || (estadoFiltro === 'stock_bajo' && esProductoFisico && (se ?? 0) > 0 && (se ?? 0) <= 5)
+      || (estadoFiltro === 'agotados'   && esProductoFisico && se === 0)
     return coincideBusqueda && coincideCategoria && coincideEstado
   })
 
-  const totalStockBajo = productos.filter(p => p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && p.stock !== null && (p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5).length
-  const totalAgotados  = productos.filter(p => p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && p.stock !== null && p.stock === 0).length
+  const totalStockBajo = productos.filter(p => { const se = stockEfectivo(p); return p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && se !== null && (se ?? 0) > 0 && (se ?? 0) <= 5 }).length
+  const totalAgotados  = productos.filter(p => { const se = stockEfectivo(p); return p.tipo_producto !== 'servicio' && p.tipo_producto !== 'evento' && p.tipo_producto !== 'alquiler' && se !== null && se === 0 }).length
 
   async function toggleActivo(id: string, activo: boolean) {
     const supabase = crearClienteSupabase()
@@ -152,8 +165,9 @@ export function ListaProductosAdmin({ productos: productosServidor, categorias }
             const esServicio  = producto.tipo_producto === 'servicio'
             const esEvento    = producto.tipo_producto === 'evento'
             const esAlquiler  = producto.tipo_producto === 'alquiler'
-            const agotado     = !esServicio && !esEvento && !esAlquiler && producto.stock !== null && producto.stock === 0
-            const stockBajo   = !esServicio && !esEvento && !esAlquiler && producto.stock !== null && producto.stock > 0 && producto.stock <= 5
+            const se          = stockEfectivo(producto)
+            const agotado     = !esServicio && !esEvento && !esAlquiler && se !== null && se === 0
+            const stockBajo   = !esServicio && !esEvento && !esAlquiler && se !== null && se > 0 && se <= 5
 
             return (
               <div
@@ -208,15 +222,15 @@ export function ListaProductosAdmin({ productos: productosServidor, categorias }
                   </div>
 
                   {/* Badge stock — siempre visible para productos físicos */}
-                  {!esServicio && !esEvento && !esAlquiler && producto.stock !== null && (
+                  {!esServicio && !esEvento && !esAlquiler && se !== null && (
                     <div className="absolute bottom-2 left-2">
                       <span className={cn(
                         'text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-sm',
-                        agotado  ? 'bg-danger text-white' :
+                        agotado   ? 'bg-danger text-white' :
                         stockBajo ? 'bg-amber-500 text-white' :
                                     'bg-black/50 text-white'
                       )}>
-                        {agotado ? 'Agotado' : `Stock: ${producto.stock}`}
+                        {agotado ? 'Agotado' : `Stock: ${se}`}
                       </span>
                     </div>
                   )}

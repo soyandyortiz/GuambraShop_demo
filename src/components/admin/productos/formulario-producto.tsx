@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Trash2, Tag, Save, ArrowLeft, Ruler, Package, Video, ImagePlus, X, PackagePlus, PartyPopper, PlusCircle, KeyRound, Search } from 'lucide-react'
+import { Plus, Trash2, Tag, Save, ArrowLeft, Ruler, Package, Video, ImagePlus, X, PackagePlus, PartyPopper, PlusCircle, KeyRound, Search, Info } from 'lucide-react'
 import { usarSubirImagen } from '@/hooks/usar-subir-imagen'
 import { useEffect } from 'react'
 import { crearClienteSupabase } from '@/lib/supabase/cliente'
@@ -136,6 +136,11 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
   const requiereTallas = watch('requiere_tallas')
   const nombreActual = watch('nombre')
   const tipoProducto = watch('tipo_producto')
+  const variantesActuales = watch('variantes')
+  const tieneVariantesReemplaza = variantesActuales.some(v => (v.tipo_precio ?? 'reemplaza') === 'reemplaza')
+  const stockTotalVariantes = variantesActuales
+    .filter(v => (v.tipo_precio ?? 'reemplaza') === 'reemplaza')
+    .reduce((sum, v) => sum + (parseInt(v.stock_variante || '0', 10) || 0), 0)
 
   useEffect(() => {
     if (!esEdicion && nombreActual) {
@@ -174,7 +179,9 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
       url_video: datos.url_video?.trim() || null,
       requiere_tallas: datos.requiere_tallas,
       tipo_producto: datos.tipo_producto,
-      stock: datos.stock ? parseInt(datos.stock, 10) : null,
+      stock: datos.variantes.some(v => (v.tipo_precio ?? 'reemplaza') === 'reemplaza')
+        ? null
+        : (datos.stock ? parseInt(datos.stock, 10) : null),
     }
 
     // Paquetes de evento
@@ -584,72 +591,89 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
 
           {tipoProducto === 'producto' && (
             <div className="flex flex-col gap-2">
-              {esEdicion && (() => {
-                const val = watch('stock')
-                const n = val !== '' && val !== undefined ? parseInt(val, 10) : null
-                if (n === null) return (
-                  <p className="text-xs text-foreground-muted">Stock: <span className="font-medium">sin control (ilimitado)</span></p>
-                )
-                if (n === 0) return (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white bg-red-500 px-2 py-0.5 rounded-lg">AGOTADO</span>
-                    <button
-                      type="button"
-                      onClick={() => setValue('stock', '1')}
-                      className="text-xs text-primary hover:underline font-medium"
-                    >
-                      Marcar con stock
-                    </button>
+              {tieneVariantesReemplaza ? (
+                <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
+                  <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700">Stock gestionado por variante</p>
+                    <p className="text-[11px] text-blue-600 mt-0.5">
+                      Este producto tiene variantes que reemplazan el precio base. El stock se controla individualmente en cada variante.
+                      {stockTotalVariantes > 0 && (
+                        <span className="font-semibold"> Total disponible: {stockTotalVariantes} uds.</span>
+                      )}
+                    </p>
                   </div>
-                )
-                if (n <= 5) return (
-                  <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg w-fit">
-                    Pocas unidades: {n}
-                  </span>
-                )
-                return (
-                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg w-fit">
-                    En stock: {n} unidades
-                  </span>
-                )
-              })()}
-
-              <Input
-                etiqueta="Stock base"
-                type="number"
-                min="0"
-                placeholder="Vacío = ilimitado"
-                {...register('stock')}
-              />
-
-              {esEdicion && (
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <PackagePlus className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
-                    <input
-                      type="number"
-                      min="1"
-                      value={agregarStockValor}
-                      onChange={e => setAgregarStockValor(e.target.value)}
-                      placeholder="Unidades a reponer"
-                      className="w-full h-10 pl-9 pr-3 rounded-xl border border-input-border bg-input-bg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!agregarStockValor || parseInt(agregarStockValor, 10) <= 0}
-                    onClick={() => {
-                      const agregar = parseInt(agregarStockValor, 10)
-                      if (isNaN(agregar) || agregar <= 0) return
-                      const actual = parseInt(watch('stock') || '0', 10) || 0
-                      setValue('stock', String(actual + agregar))
-                      setAgregarStockValor('')
-                    }}
-                    className="h-10 px-4 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-                  >
-                    + Reponer
-                  </button>
                 </div>
+              ) : (
+                <>
+                  {esEdicion && (() => {
+                    const val = watch('stock')
+                    const n = val !== '' && val !== undefined ? parseInt(val, 10) : null
+                    if (n === null) return (
+                      <p className="text-xs text-foreground-muted">Stock: <span className="font-medium">sin control (ilimitado)</span></p>
+                    )
+                    if (n === 0) return (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white bg-red-500 px-2 py-0.5 rounded-lg">AGOTADO</span>
+                        <button
+                          type="button"
+                          onClick={() => setValue('stock', '1')}
+                          className="text-xs text-primary hover:underline font-medium"
+                        >
+                          Marcar con stock
+                        </button>
+                      </div>
+                    )
+                    if (n <= 5) return (
+                      <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg w-fit">
+                        Pocas unidades: {n}
+                      </span>
+                    )
+                    return (
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg w-fit">
+                        En stock: {n} unidades
+                      </span>
+                    )
+                  })()}
+
+                  <Input
+                    etiqueta="Stock base"
+                    type="number"
+                    min="0"
+                    placeholder="Vacío = ilimitado"
+                    {...register('stock')}
+                  />
+
+                  {esEdicion && (
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <PackagePlus className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground-muted" />
+                        <input
+                          type="number"
+                          min="1"
+                          value={agregarStockValor}
+                          onChange={e => setAgregarStockValor(e.target.value)}
+                          placeholder="Unidades a reponer"
+                          className="w-full h-10 pl-9 pr-3 rounded-xl border border-input-border bg-input-bg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!agregarStockValor || parseInt(agregarStockValor, 10) <= 0}
+                        onClick={() => {
+                          const agregar = parseInt(agregarStockValor, 10)
+                          if (isNaN(agregar) || agregar <= 0) return
+                          const actual = parseInt(watch('stock') || '0', 10) || 0
+                          setValue('stock', String(actual + agregar))
+                          setAgregarStockValor('')
+                        }}
+                        className="h-10 px-4 rounded-xl bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                      >
+                        + Reponer
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
