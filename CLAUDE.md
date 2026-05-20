@@ -197,7 +197,7 @@ Ambos verifican que `configuracion_email.activo = true` antes de enviar. Si no h
 
 El sitio puede correr en modo demo (sin Supabase real). `DemoProvider` expone `usarModoDemo()`. Los datos se persisten en localStorage mediante `DemoStore` (`src/lib/supabase/demo-store.ts`). El hook `useDemoDatos(tabla, datosServidor)` (`src/hooks/usar-demo-datos.ts`) intercala datos de servidor con los cambios locales demo. En modo demo los cambios no llegan a Supabase.
 
-El modo demo se activa cuando `user.email === 'demo@tiendademo.local'` (comprobado en `dashboard/layout.tsx`), no vía variable de entorno.
+El modo demo se activa cuando `user.email === 'demo@tiendademo.local'` (comprobado en `dashboard/layout.tsx`), no vía variable de entorno. **El usuario `demo@guambrashop.com` NO activa modo demo** — usa Supabase real y todos sus cambios persisten en la BD.
 
 ## Roles
 
@@ -209,8 +209,8 @@ Verificación via función SQL `obtener_rol()` en políticas RLS.
 
 ## Credenciales demo
 
-- Superadmin: `0604511089` / `0604511089`
-- Admin: `admin@tiendademo.com` / `admin`
+- Admin público (GuambraShop_demo): `demo@guambrashop.com` / `admin123` — rol `admin`, usa Supabase real
+- Demo aislado (sin persistencia): `demo@tiendademo.local` — activa DemoStore en localStorage
 
 Se crean en Supabase Auth con metadatos `{ "rol": "superadmin" }` o `{ "rol": "admin" }`. El trigger `tr_crear_perfil_al_registrar` crea automáticamente la fila en `perfiles`.
 
