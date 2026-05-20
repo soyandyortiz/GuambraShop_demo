@@ -118,7 +118,7 @@ export function FormularioLogin() {
     }
 
     const emailIngresado = normalizarEmail(datos.email)
-    if (emailIngresado === 'demo@tiendademo.local' || emailIngresado === 'demo@guambrashop.com') {
+    if (emailIngresado === 'demo@tiendademo.local') {
       localStorage.setItem(CLAVE_DEMO, 'true')
     } else {
       localStorage.removeItem(CLAVE_DEMO)
