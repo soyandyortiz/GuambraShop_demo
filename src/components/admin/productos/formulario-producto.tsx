@@ -233,7 +233,7 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
           nombre: v.nombre,
           descripcion: v.descripcion ?? null,
           precio_variante: v.precio_variante ? Number(v.precio_variante) : null,
-          stock: v.stock_variante ? parseInt(v.stock_variante, 10) : null,
+          stock_variante: v.stock_variante ? parseInt(v.stock_variante, 10) : null,
           imagen_url: v.imagen_url?.trim() || null,
           tipo_precio: (v.tipo_precio === 'suma' ? 'suma' : 'reemplaza'),
           orden: i,
