@@ -44,10 +44,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Supabase — se rastrea todo excepto config local de CLI
-/supabase/.branches/
-/supabase/.temp/
-/supabase/config.toml
+# Supabase — no exponer migraciones ni config en repo público
+/supabase/
 
 # sensitive files
 *.p12
