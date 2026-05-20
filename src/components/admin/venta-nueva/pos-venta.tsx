@@ -1352,6 +1352,13 @@ export function PosVenta({ productos, clientes, simboloMoneda, pais = 'EC', nomb
               </button>
             </div>
             <div className="flex flex-col gap-2">
+              <button
+                onClick={() => { agregarProducto(productoVariante); setProductoVariante(null) }}
+                className="flex items-center justify-between px-4 py-3 rounded-xl border border-card-border hover:border-primary/50 hover:bg-primary/5 transition-all text-left"
+              >
+                <span className="text-sm font-semibold text-foreground">Sin variante</span>
+                <p className="text-sm font-bold text-primary">{formatearPrecio(productoVariante.precio_descuento ?? productoVariante.precio, simboloMoneda)}</p>
+              </button>
               {productoVariante.variantes.map(v => {
                 const precioBase = productoVariante.precio_descuento ?? productoVariante.precio
                 const precioFinal = v.tipo_precio === 'reemplaza'

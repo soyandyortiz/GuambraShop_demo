@@ -117,7 +117,7 @@ export function FormularioProducto({ categorias, producto, productosExistentes =
         id: v.id, nombre: v.nombre,
         descripcion: v.descripcion ?? '',
         precio_variante: v.precio_variante?.toString() ?? '',
-        stock_variante: (v as any).stock?.toString() ?? '',
+        stock_variante: (v as any).stock_variante?.toString() ?? '',
         imagen_url: v.imagen_url ?? '',
         tipo_precio: ((v.tipo_precio === 'suma' ? 'suma' : 'reemplaza') as 'reemplaza' | 'suma'),
       })) ?? [],

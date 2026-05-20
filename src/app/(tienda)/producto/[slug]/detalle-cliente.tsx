@@ -81,7 +81,7 @@ export function DetalleProductoCliente({ producto, imagenes, variantes, tallas, 
   // Variantes "suma" — add-ons multi-seleccionables
   const variantesExtra = variantes.filter(v => v.tipo_precio === 'suma')
 
-  const [varianteId, setVarianteId] = useState<string | null>(variantesReemplaza[0]?.id ?? null)
+  const [varianteId, setVarianteId] = useState<string | null>(null)
   const [extrasSeleccionados, setExtrasSeleccionados] = useState<string[]>([])
   const [talla, setTalla] = useState<string | null>(null)
   const [cantidad, setCantidad] = useState(1)
@@ -621,8 +621,13 @@ const anteriorImg = () => setImgActiva(i => (i - 1 + imagenes.length) % imagenes
               <div className="flex flex-wrap gap-2">
                 {variantesReemplaza.map(v => (
                   <button key={v.id} onClick={() => {
-                    setVarianteId(v.id)
-                    setImagenVariante(v.imagen_url ?? null)
+                    if (varianteId === v.id) {
+                      setVarianteId(null)
+                      setImagenVariante(null)
+                    } else {
+                      setVarianteId(v.id)
+                      setImagenVariante(v.imagen_url ?? null)
+                    }
                   }}
                     className={cn('flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all',
                       varianteId === v.id

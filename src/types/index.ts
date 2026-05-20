@@ -146,7 +146,7 @@ export interface VarianteProducto {
   esta_activa: boolean
   orden: number
   creado_en: string
-  stock?: number | null
+  stock_variante?: number | null
   tipo_precio?: 'reemplaza' | 'suma' | null  // 'reemplaza' = sustituye precio base; 'suma' = add-on
 }
 

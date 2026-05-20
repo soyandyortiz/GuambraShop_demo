@@ -11,7 +11,7 @@ export default async function PáginaEditarProducto({ params }: Props) {
   const [{ data: producto }, { data: categorias }, { data: productosExistentes }, { data: relacionadosData }] = await Promise.all([
     supabase
       .from('productos')
-      .select('*, imagenes_producto(id, url, orden), variantes_producto(id, nombre, descripcion, precio_variante, esta_activa, orden), tallas_producto(id, talla, disponible, orden)')
+      .select('*, imagenes_producto(id, url, orden), variantes_producto(id, nombre, descripcion, precio_variante, stock_variante, imagen_url, tipo_precio, esta_activa, orden), tallas_producto(id, talla, disponible, stock, orden)')
       .eq('id', id)
       .single(),
     supabase.from('categorias').select('id, nombre, slug, parent_id, imagen_url, esta_activa, orden, creado_en').eq('esta_activa', true).order('nombre'),

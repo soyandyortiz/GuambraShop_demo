@@ -45,7 +45,7 @@ export function TarjetaProducto({
   const [modalAgendarAbierto, setModalAgendarAbierto] = useState(false)
   
   // Gestión de variantes
-  const [varianteId, setVarianteId] = useState<string>(variantes?.[0]?.id || '')
+  const [varianteId, setVarianteId] = useState<string | null>(null)
   const varianteSeleccionada = variantes?.find(v => v.id === varianteId)
 
   const fav = esFavorito(id)
@@ -218,11 +218,12 @@ export function TarjetaProducto({
         {variantes && variantes.length > 0 && (
           <div className="mt-1.5 relative group/select">
             <select
-              value={varianteId}
-              onChange={(e) => setVarianteId(e.target.value)}
+              value={varianteId ?? ''}
+              onChange={(e) => setVarianteId(e.target.value || null)}
               onClick={(e) => e.stopPropagation()}
               className="w-full h-8 pl-2 pr-7 rounded-lg bg-background-subtle border border-card-border text-[10px] font-medium text-foreground appearance-none focus:outline-none focus:ring-1 focus:ring-primary/40 cursor-pointer transition-all hover:border-primary/30"
             >
+              <option value="">Sin variante</option>
               {variantes.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.nombre} {v.precio_variante ? `(${formatearPrecio(v.precio_variante)})` : ''}
