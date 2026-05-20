@@ -16,6 +16,9 @@ import { imprimirTicket, type ConfigTicket } from '@/lib/ticket'
 import type { Pedido, EstadoPedido } from '@/types'
 import { PaginacionAdmin } from '@/components/ui/paginacion-admin'
 
+// Estados donde confirmar_pedido() aún NO ha sido llamado (stock sin descontar)
+const ESTADOS_SIN_CONFIRMAR: EstadoPedido[] = ['pendiente_pago', 'pendiente_validacion', 'en_espera']
+
 const ESTADOS: Record<EstadoPedido, { etiqueta: string; color: string; icono: React.ReactNode }> = {
   pendiente_pago:        { etiqueta: 'Pendiente de pago',    color: 'bg-gray-100 text-gray-600 border-gray-200',     icono: <Clock className="w-3 h-3" /> },
   pendiente_validacion:  { etiqueta: 'Validando comprobante', color: 'bg-amber-50 text-amber-700 border-amber-200',  icono: <Upload className="w-3 h-3" /> },
@@ -201,20 +204,29 @@ export function TablaPedidos({
   async function cambiarEstado(id: string, nuevoEstado: EstadoPedido) {
     setActualizando(id)
     const supabase = crearClienteSupabase()
+    const pedidoActual = pedidos.find(p => p.id === id)
     let error = null
-    if (nuevoEstado === 'procesando') {
+
+    const stockSinDescontar = ESTADOS_SIN_CONFIRMAR.includes(pedidoActual?.estado as EstadoPedido)
+    const esTransicionPositiva = nuevoEstado !== 'cancelado' && nuevoEstado !== 'reembolsado' && nuevoEstado !== 'fallido'
+
+    if (stockSinDescontar && esTransicionPositiva) {
+      // Descontar stock + confirmar citas antes de avanzar al nuevo estado
       const { error: rpcError } = await supabase.rpc('confirmar_pedido', { p_pedido_id: id })
       error = rpcError
-      if (!error) {
-        const pedido = pedidos.find(p => p.id === id)
-        if (pedido?.comprobante_url) {
-          await supabase.rpc('marcar_comprobante_para_eliminar', { p_pedido_id: id })
-        }
+      if (!error && pedidoActual?.comprobante_url) {
+        await supabase.rpc('marcar_comprobante_para_eliminar', { p_pedido_id: id })
+      }
+      // confirmar_pedido deja el estado en 'procesando'; si el destino es otro, actualizarlo
+      if (!error && nuevoEstado !== 'procesando') {
+        const { error: updError } = await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', id)
+        error = updError
       }
     } else {
       const { error: updateError } = await supabase.from('pedidos').update({ estado: nuevoEstado }).eq('id', id)
       error = updateError
     }
+
     setActualizando(null)
     if (error) { toast.error('Error al actualizar el estado'); return }
     setPedidos(ps => ps.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p))
@@ -234,6 +246,19 @@ export function TablaPedidos({
       const { error: delErr } = await supabase.from('pedidos').delete().in('id', seleccionados)
       error = delErr
       if (!error) setPedidos(ps => ps.filter(p => !seleccionados.includes(p.id)))
+    } else if (accion === 'completado') {
+      // Descontar stock de los que aún no fueron confirmados
+      const porConfirmar = pedidos.filter(p =>
+        seleccionados.includes(p.id) && ESTADOS_SIN_CONFIRMAR.includes(p.estado as EstadoPedido)
+      )
+      if (porConfirmar.length > 0) {
+        await Promise.allSettled(
+          porConfirmar.map(p => supabase.rpc('confirmar_pedido', { p_pedido_id: p.id }))
+        )
+      }
+      const { error: updErr } = await supabase.from('pedidos').update({ estado: 'completado' }).in('id', seleccionados)
+      error = updErr
+      if (!error) setPedidos(ps => ps.map(p => seleccionados.includes(p.id) ? { ...p, estado: 'completado' } : p))
     } else {
       const { error: updErr } = await supabase.from('pedidos').update({ estado: accion }).in('id', seleccionados)
       error = updErr
