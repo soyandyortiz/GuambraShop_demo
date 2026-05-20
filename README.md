@@ -806,26 +806,43 @@ Ambos ajustes son independientes y se aplican en tiempo real sin redeploy. El co
 
 Envío masivo de correos desde el panel admin, con límites automáticos para no saturar la cuenta de Gmail.
 
-### Cómo funciona
+### Flujo paso a paso
 
-1. Ir a **Promociones → Email Marketing**
-2. Crear una campaña: nombre interno, asunto y cuerpo del correo
-3. Importar los contactos desde un archivo Excel o CSV (columnas: Nombre, Email, WhatsApp)
-4. Activar la campaña — el sistema empieza a enviar automáticamente cada 2 horas (hasta 50 correos al día, 300 al mes)
+1. **Descargar plantilla** — botón *Plantilla Excel* en la esquina superior derecha de la sección. Genera un `.xlsx` con tres columnas: Nombre, Email, WhatsApp.
+2. **Importar lista** — botón *Importar lista*. Sube el Excel o CSV, el sistema muestra una tabla de preview con los contactos válidos y errores detectados. Al confirmar los contactos quedan listos en memoria.
+3. **Crear mensaje** — una vez confirmada la lista el botón cambia a *Crear mensaje · N contactos* (verde). Al hacer clic se abre el editor:
+   - **Diseño**: 3 plantillas visuales — Mensaje (texto directo), Destacado (con botón de acción), Noticia (titular grande + cuerpo + botón)
+   - **Texto**: textarea de texto plano, sin HTML visible. Botones para insertar `{{nombre}}` y `{{tienda}}` en la posición del cursor.
+   - **Imagen**: sube una imagen que se comprime automáticamente al navegador (sin tocar Supabase Storage).
+   - **Botón de acción**: texto + URL (opcional, para todos los diseños).
+   - **Firma**: campo de texto — la primera línea aparece en negrita (tu nombre), las siguientes como datos de contacto con línea decorativa. Se renderiza como firma formal HTML en el email enviado.
+   - **Vista previa**: botón *Vista previa* muestra el email final con estilo Gmail realista (encabezado, remitente, cuerpo, footer).
+4. **Enviar**:
+   - **⚡ Enviar ahora** — llama al procesador en tiempo real con pausas de 4 segundos entre lotes (evita que Gmail marque como spam). El botón rojo cancela el envío en cualquier momento.
+   - **Automático (cron diario)** — si no se hace nada, el sistema envía automáticamente cada día a las **5 AM (hora Ecuador)**.
 
-### Variables disponibles en el cuerpo del correo
+### Variables disponibles en el texto del correo
 
 | Variable | Se reemplaza por |
 |----------|-----------------|
-| `{{nombre}}` | Nombre del contacto |
-| `{{tienda}}` | Nombre del negocio |
+| `{{nombre}}` | Nombre del contacto importado |
+| `{{tienda}}` | Nombre del negocio (de `configuracion_tienda`) |
 
 ### Límites de envío
 
 - **50 correos/día** y **300 correos/mes** — protegen la cuenta Gmail del cliente de ser bloqueada como spam
-- El panel muestra en tiempo real cuántos se han enviado hoy y en el mes
+- El panel muestra en tiempo real cuántos se han enviado hoy y en el mes con barra de progreso
+- Al alcanzar el límite diario el cron espera automáticamente hasta el día siguiente
 
-### Lo que necesita el cliente
+### Requisitos
 
-- Tener configurado el módulo Email (Gmail o SMTP propio) en `/admin/dashboard/email`
-- El cron ya está activo en Vercel — no requiere configuración adicional
+- Módulo Email activo en `/admin/dashboard/email` (Gmail, SMTP propio o Resend)
+- El cron está configurado en `vercel.json` → `"0 10 * * *"` (10:00 UTC = 5 AM Ecuador, plan Hobby solo permite crons diarios)
+
+### SQL para nuevo cliente
+
+Incluido en `schema.sql` (_065). Para aplicar manualmente en proyecto existente:
+
+```sql
+-- Ejecutar: supabase/migrations/20260519000065_campanas_email.sql
+```

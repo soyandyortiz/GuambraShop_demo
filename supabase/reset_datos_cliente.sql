@@ -19,18 +19,45 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------
--- TABLAS (orden respeta las FK)
+-- TABLAS (orden respeta las FK — hijos antes que padres)
 -- ------------------------------------------------------------
+
+-- Facturación
 SELECT _borrar_si_existe('facturas');
 SELECT _borrar_si_existe('proformas');
+
+-- Ventas y reservas
 SELECT _borrar_si_existe('alquileres');
 SELECT _borrar_si_existe('citas');
+
+-- Crédito (CASCADE desde pedidos, pero explicitamos por si acaso)
+SELECT _borrar_si_existe('abonos_credito');
+SELECT _borrar_si_existe('cuotas_credito');
+
+-- Pedidos y clientes
 SELECT _borrar_si_existe('pedidos');
 SELECT _borrar_si_existe('clientes');
+
+-- Solicitudes y leads
 SELECT _borrar_si_existe('solicitudes_evento');
+SELECT _borrar_si_existe('leads');
+
+-- Reseñas y likes
 SELECT _borrar_si_existe('likes_producto');
 SELECT _borrar_si_existe('resenas_producto');
+
+-- Finanzas
+SELECT _borrar_si_existe('pagos_proveedores');
+SELECT _borrar_si_existe('egresos');
+SELECT _borrar_si_existe('cierres_caja');
+
+-- Proveedores (después de pagos)
+SELECT _borrar_si_existe('proveedores');
+
+-- Mensajes internos
 SELECT _borrar_si_existe('mensajes_admin');
+
+-- Email marketing
 SELECT _borrar_si_existe('contactos_campana');
 SELECT _borrar_si_existe('campanas_email');
 SELECT _borrar_si_existe('email_envios_diarios');
@@ -66,16 +93,27 @@ DROP FUNCTION _borrar_si_existe(TEXT);
 COMMIT;
 
 -- ------------------------------------------------------------
--- VERIFICACIÓN
+-- VERIFICACIÓN — todas deben quedar en 0
 -- ------------------------------------------------------------
 SELECT tabla, registros FROM (
-  SELECT 1 AS ord, 'pedidos'           AS tabla, COUNT(*)::int AS registros FROM pedidos
-  UNION ALL SELECT 2, 'clientes',          COUNT(*) FROM clientes
-  UNION ALL SELECT 3, 'citas',             COUNT(*) FROM citas
-  UNION ALL SELECT 4, 'alquileres',        COUNT(*) FROM alquileres
-  UNION ALL SELECT 5, 'solicitudes_evento',COUNT(*) FROM solicitudes_evento
-  UNION ALL SELECT 6, 'facturas',          COUNT(*) FROM facturas
-  UNION ALL SELECT 7, 'likes_producto',    COUNT(*) FROM likes_producto
-  UNION ALL SELECT 8, 'resenas_producto',  COUNT(*) FROM resenas_producto
-  UNION ALL SELECT 9, 'mensajes_admin',    COUNT(*) FROM mensajes_admin
+  SELECT  1 AS ord, 'pedidos'             AS tabla, COUNT(*)::int AS registros FROM pedidos
+  UNION ALL SELECT  2, 'clientes',                   COUNT(*) FROM clientes
+  UNION ALL SELECT  3, 'citas',                      COUNT(*) FROM citas
+  UNION ALL SELECT  4, 'alquileres',                 COUNT(*) FROM alquileres
+  UNION ALL SELECT  5, 'solicitudes_evento',         COUNT(*) FROM solicitudes_evento
+  UNION ALL SELECT  6, 'facturas',                   COUNT(*) FROM facturas
+  UNION ALL SELECT  7, 'proformas',                  COUNT(*) FROM proformas
+  UNION ALL SELECT  8, 'cuotas_credito',             COUNT(*) FROM cuotas_credito
+  UNION ALL SELECT  9, 'abonos_credito',             COUNT(*) FROM abonos_credito
+  UNION ALL SELECT 10, 'egresos',                    COUNT(*) FROM egresos
+  UNION ALL SELECT 11, 'cierres_caja',               COUNT(*) FROM cierres_caja
+  UNION ALL SELECT 12, 'pagos_proveedores',          COUNT(*) FROM pagos_proveedores
+  UNION ALL SELECT 13, 'proveedores',                COUNT(*) FROM proveedores
+  UNION ALL SELECT 14, 'leads',                      COUNT(*) FROM leads
+  UNION ALL SELECT 15, 'likes_producto',             COUNT(*) FROM likes_producto
+  UNION ALL SELECT 16, 'resenas_producto',           COUNT(*) FROM resenas_producto
+  UNION ALL SELECT 17, 'mensajes_admin',             COUNT(*) FROM mensajes_admin
+  UNION ALL SELECT 18, 'campanas_email',             COUNT(*) FROM campanas_email
+  UNION ALL SELECT 19, 'contactos_campana',          COUNT(*) FROM contactos_campana
+  UNION ALL SELECT 20, 'email_envios_diarios',       COUNT(*) FROM email_envios_diarios
 ) t ORDER BY ord;
