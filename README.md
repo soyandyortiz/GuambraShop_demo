@@ -1,3 +1,10 @@
+# GuambraShop Demo
+
+> **Acceso demo:** `demo@guambrashop.com` / `admin123`
+> El botón de acceso rápido ya aparece en el login — los cambios realizados con esta cuenta persisten en la base de datos.
+
+---
+
 # GuambraShop — Deploy para nuevo cliente
 
 ## 1. Crear proyecto en Supabase
@@ -43,11 +50,11 @@ La interfaz de Supabase ya no permite editar los metadatos visualmente. Hay que 
 
 En el menú lateral, click en **SQL Editor** y ejecutar:
 
-**Superadmin (siempre GuambraWeb):**
+**Superadmin (GuambraWeb):**
 ```sql
 UPDATE auth.users
 SET raw_user_meta_data = '{"rol": "superadmin", "nombre": "GuambraWeb"}'
-WHERE email = 'andyortiz.ec@gmail.com';
+WHERE email = 'TU_EMAIL_SUPERADMIN';
 ```
 
 **Admin (cuenta del cliente):**
@@ -72,7 +79,7 @@ Si el rol en `perfiles` está incorrecto, corregirlo directamente desde **SQL Ed
 ```sql
 UPDATE perfiles
 SET rol = 'superadmin'
-WHERE id = (SELECT id FROM auth.users WHERE email = 'andyortiz.ec@gmail.com');
+WHERE id = (SELECT id FROM auth.users WHERE email = 'TU_EMAIL_SUPERADMIN');
 ```
 
 > Si `perfiles` está vacía, el trigger no se ejecutó — probablemente el usuario fue creado antes de correr el `schema.sql`. Solución: eliminar el usuario desde Authentication → Users y volver a crearlo después de haber ejecutado el schema.
