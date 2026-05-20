@@ -16,6 +16,8 @@ const geist = Geist({
   preload: false,
 })
 
+export const dynamic = 'force-dynamic'
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,

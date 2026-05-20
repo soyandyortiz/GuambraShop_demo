@@ -493,12 +493,18 @@ function TabColores({ config }: { config: ConfigTienda }) {
     setColorActual(primario)
     setGuardandoColor(true)
     const supabase = crearClienteSupabase()
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('configuracion_tienda')
       .update({ color_primario: primario })
       .eq('id', config.id)
+      .select('color_primario')
+      .single()
     setGuardandoColor(false)
-    if (error) { toast.error('Error al guardar color'); return }
+    if (error || !data) {
+      toast.error('Error al guardar color — verifica permisos')
+      setColorActual(colorActual)
+      return
+    }
 
     // Aplica en tiempo real
     document.documentElement.style.setProperty('--primary', primario)
