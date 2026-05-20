@@ -207,18 +207,16 @@ export function ListaProductosAdmin({ productos: productosServidor, categorias }
                     </span>
                   </div>
 
-                  {/* Badge stock */}
-                  {agotado && (
+                  {/* Badge stock — siempre visible para productos físicos */}
+                  {!esServicio && !esEvento && !esAlquiler && producto.stock !== null && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-danger text-white shadow-sm">
-                        Agotado
-                      </span>
-                    </div>
-                  )}
-                  {stockBajo && (
-                    <div className="absolute bottom-2 left-2">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white shadow-sm">
-                        Stock: {producto.stock}
+                      <span className={cn(
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-sm',
+                        agotado  ? 'bg-danger text-white' :
+                        stockBajo ? 'bg-amber-500 text-white' :
+                                    'bg-black/50 text-white'
+                      )}>
+                        {agotado ? 'Agotado' : `Stock: ${producto.stock}`}
                       </span>
                     </div>
                   )}
